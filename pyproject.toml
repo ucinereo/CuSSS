@@ -1,0 +1,29 @@
+[project]
+name = "CuSSS"
+version = "0.1.0"
+description = "CUDA implementaiton of SSS variants"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "nvtx",
+]
+
+[build-system]
+requires = [
+    "setuptools >= 69",
+    "wheel >=0.45",
+    "cmake >=3.30",
+    "torch >= 2.0",
+]
+
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+zip-safe = false
+packages = ["cusss.ops"]
+
+[project.optional-dependencies]
+tests = [
+    "unittest",
+]
