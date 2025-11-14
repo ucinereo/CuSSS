@@ -60,6 +60,9 @@ std::vector<torch::Tensor> backward_cuda(torch::Tensor &x, torch::Tensor &grad_o
     TORCH_CHECK(grad_outputs.dtype() == torch::kFloat, "Grad tensor must be float!");
     TORCH_CHECK(grad_outputs.is_cuda(), "Grad tensor must be a CUDA tensor!");
     TORCH_CHECK(x.numel() == grad_outputs.numel(), "Grad tensor must be a CUDA tensor!");
+
+    auto grad_outputs_contig = grad_outputs.contiguous(); // Apparently since the loss output might be non-contiguous
+
     auto grad_x = torch::empty_like(x);
     int size = x.numel();
 
@@ -69,7 +72,7 @@ std::vector<torch::Tensor> backward_cuda(torch::Tensor &x, torch::Tensor &grad_o
 
     sss_backward_kernel<<<numBlocks, blockSize>>>(
         x.data_ptr<float>(),
-        grad_outputs.data_ptr<float>(),
+        grad_outputs_contig.data_ptr<float>(),
         grad_x.data_ptr<float>(),
         size
     );
