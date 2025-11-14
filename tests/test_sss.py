@@ -8,7 +8,7 @@ def sss_setup():
     """Fixture to set up SSS instances and test input"""
     device = torch.device("cuda")
     
-    x = torch.randn(10, 10, device=device)
+    x = torch.randn(10, 10, device=device, requires_grad=True)
     sss = SSS().to(device)
 
     return {
