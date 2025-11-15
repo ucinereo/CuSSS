@@ -37,5 +37,11 @@ pip install . --no-build-isolation --no-deps
 pytest tests/ -v
 ```
 
+## Benchmarking
+### Benchmark our SSS Implementation vs PyTorch Sigmoid
+```bash
+python3 benchmarks/sss_sigmoid_benchmark.py
+```
+
 # Acknowledgments
 - Cuda implementation of [xielu](https://github.com/rubber-duck-debug/xielu) for repository structure.
