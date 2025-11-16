@@ -11,4 +11,4 @@ if __name__ == "__main__":
     sigmoid = torch.nn.Sigmoid()  
     relu = torch.nn.ReLU()  
 
-    benchmark_on_cuda({"SSS Cuda": sss_cuda, "Sigmoid torch": sigmoid, "ReLU torch": relu})
+    benchmark_on_cuda(modules={"SSS Cuda": sss_cuda, "ReLU torch": relu}, baseline=("Sigmoid torch", sigmoid))
