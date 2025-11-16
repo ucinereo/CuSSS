@@ -26,6 +26,12 @@ __global__ void sigmoid_forward_kernel(const float* x, float* output, int size) 
   }
 }
 
+__global__ void identity_kernel(const float* x, float* output, int size) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < size) {
+    output[idx] = x[idx];
+  }
+}
 
 // ------------------------------------------------------------
 // A wrapper for ANY kernel with signature:
@@ -110,6 +116,11 @@ int main() {
         {"Sigmoid",
             (void (*)(const float*, float*, int))(
                 launch_kernel<sigmoid_forward_kernel>),
+            grid, block},
+
+        {"Identity",
+            (void (*)(const float*, float*, int))(
+                launch_kernel<identity_kernel>),
             grid, block}
     };
 
