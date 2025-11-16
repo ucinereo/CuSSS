@@ -40,6 +40,7 @@ pytest tests/ -v
 ## Benchmarking
 ### Benchmark our SSS Implementation vs PyTorch Sigmoid
 ```bash
+pip install megatron-core
 python3 benchmarks/sss_sigmoid_benchmark.py
 ```
 
