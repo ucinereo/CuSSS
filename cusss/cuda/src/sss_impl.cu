@@ -64,12 +64,15 @@ __global__ void sss_forward_kernel_f4(const float* x, float* output, int size) {
 
         // vectorized store
         reinterpret_cast<float4*>(output)[i4] = out;
-    } else {
-        for (int i = 0; i < size - base; i++) {
-            float e = x[base+i];
-            float inv = __frcp_rn(1.0f + fabsf(e));
-            output[base+i] = e * inv * 0.5f + 0.5f;
-        }
+    }
+}
+
+__global__ void sss_forward_tail_kernel(const float* x, float* output, int start, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x + start;
+    if (idx < size) {
+        float e = x[idx];
+        float inv = __frcp_rn(1.0f + fabsf(e));
+        output[idx] = (e * inv) * 0.5f + 0.5f;
     }
 }
 
@@ -110,13 +113,16 @@ __global__ void sss_backward_kernel_f4(const float* x, const float* grad_out, fl
 
         // vectorized store
         reinterpret_cast<float4*>(grad_x)[i4] = out;
-    } else {
-        for (int i = 0; i < size - base; i++) {
-            float e = x[base+i];
-            float g = grad_out[base+i];
-            float inv = __frcp_rn(1.0f + fabsf(e));
-            grad_x[base+i] = g * (inv * inv) * 0.5f;
-        }
+    } 
+}
+
+__global__ void sss_backward_tail_kernel(const float* x, const float* grad_out, float* grad_x, int start, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x + start;
+    if (idx < size) {
+        float e = x[idx];
+        float inv = __frcp_rn(1.0f + fabsf(e));
+        float grad = inv * inv * 0.5f;
+        grad_x[idx] = grad_out[idx] * grad;
     }
 }
 
@@ -177,11 +183,22 @@ torch::Tensor forward_cuda_f4(torch::Tensor &x) {
     
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int numBlocks = (size/4 + blockSize - 1) / blockSize;
+    int num4 = size/4;
+    int numBlocks = (num4 + blockSize - 1) / blockSize;
 
     sss_forward_kernel_f4<<<numBlocks, blockSize>>>(
         x.data_ptr<float>(), output.data_ptr<float>(), size
     );
+
+    int tail = size % 4; // remaining elements
+    if (tail > 0) {
+        int tailBlockSize = 32;  // small, enough for 1–3 elements
+        int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
+
+        sss_forward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
+            x.data_ptr<float>(), output.data_ptr<float>(), num4 * 4, size
+        );
+    }
 
     return output;
 }
@@ -200,7 +217,8 @@ std::vector<torch::Tensor> backward_cuda_f4(torch::Tensor &x, torch::Tensor &gra
 
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int numBlocks = (size/4 + blockSize - 1) / blockSize;
+    int num4 = size/4;
+    int numBlocks = (num4 + blockSize - 1) / blockSize;
 
     sss_backward_kernel_f4<<<numBlocks, blockSize>>>(
         x.data_ptr<float>(),
@@ -208,6 +226,20 @@ std::vector<torch::Tensor> backward_cuda_f4(torch::Tensor &x, torch::Tensor &gra
         grad_x.data_ptr<float>(),
         size
     );
+
+    int tail = size % 4; // remaining elements
+    if (tail > 0) {
+        int tailBlockSize = 32;  // small, enough for 1–3 elements
+        int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
+
+        sss_backward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
+            x.data_ptr<float>(), 
+            grad_outputs.data_ptr<float>(),
+            grad_x.data_ptr<float>(), 
+            num4 * 4, 
+            size
+        );
+    }
 
     return {grad_x};
 }
