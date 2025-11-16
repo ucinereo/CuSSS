@@ -38,10 +38,16 @@ pytest tests/ -v
 ```
 
 ## Benchmarking
-### Benchmark our SSS Implementation vs PyTorch Sigmoid
+### Benchmark our SSS Implementations vs PyTorch Sigmoid
 ```bash
 pip install megatron-core
 python3 benchmarks/sss_sigmoid_benchmark.py
+```
+
+### Benchmark SSS forward vs Sigmoid forward kernels
+```bash
+nvcc benchmarks/kernel_benchmark.cu -O3 -o ./build/cuda_benchmark
+./build/cuda_benchmark
 ```
 
 # Acknowledgments
