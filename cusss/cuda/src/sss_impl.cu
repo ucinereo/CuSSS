@@ -267,5 +267,5 @@ torch::Tensor SSSAutograd_f4::forward(AutogradContext *ctx, Tensor x) {
 variable_list SSSAutograd_f4::backward(AutogradContext *ctx, variable_list grad_outputs) {
     auto saved = ctx->get_saved_variables();
     auto x = saved[0];
-    return backward_cuda(x, grad_outputs[0]);
+    return backward_cuda_f4(x, grad_outputs[0]);
 }
