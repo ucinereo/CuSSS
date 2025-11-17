@@ -59,7 +59,7 @@ std::vector<torch::Tensor> backward_cuda(torch::Tensor &x, torch::Tensor &grad_o
     TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
     TORCH_CHECK(grad_outputs.dtype() == torch::kFloat, "Grad tensor must be float!");
     TORCH_CHECK(grad_outputs.is_cuda(), "Grad tensor must be a CUDA tensor!");
-    TORCH_CHECK(x.numel() == grad_outputs.numel(), "Grad tensor must be a CUDA tensor!");
+    TORCH_CHECK(x.numel() == grad_outputs.numel(), "Grad and input tensor must have the same number of elements!");
 
     auto grad_outputs_contig = grad_outputs.contiguous(); // Apparently since the loss output might be non-contiguous
 
