@@ -39,7 +39,7 @@ __global__ void identity_kernel(const float* x, float* output, int size) {
 // ------------------------------------------------------------
 struct KernelWrapper {
     std::string name;
-    void (*func)(const float*, float*, int);  // kernel symbol pointer
+    std::function<void (const float*, float*, int)> func;  // kernel symbol pointer
     dim3 grid;
     dim3 block;
 };
@@ -64,7 +64,7 @@ float benchmark(const KernelWrapper& k,
     for (int i = 0; i < 10; i++) {
         k.func(x, y, n);
     }
-    cudaDeviceSynchronize();
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     cudaEvent_t start, end;
     CUDA_CHECK(cudaEventCreate(&start));
@@ -78,10 +78,10 @@ float benchmark(const KernelWrapper& k,
     CUDA_CHECK(cudaEventSynchronize(end));
 
     float ms = 0;
-    cudaEventElapsedTime(&ms, start, end);
+    CUDA_CHECK(cudaEventElapsedTime(&ms, start, end));
 
-    cudaEventDestroy(start);
-    cudaEventDestroy(end);
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(end));
 
     return ms / iters;
 }
@@ -107,22 +107,31 @@ int main() {
     const int iters = 500;
 
     // Register kernels in a vector
-    std::vector<KernelWrapper> kernels = {
-        {"SSS",
-            (void (*)(const float*, float*, int))(
-                launch_kernel<sss_forward_kernel>),
-            grid, block},
+    std::vector<KernelWrapper> kernels;
 
-        {"Sigmoid",
-            (void (*)(const float*, float*, int))(
-                launch_kernel<sigmoid_forward_kernel>),
-            grid, block},
+    kernels.push_back({
+        "Sigmoid",
+        [grid, block] (const float* x, float* y, int m) {
+            sigmoid_forward_kernel<<<grid, block>>>(x, y, m);
+        },
+        grid, block
+    });
 
-        {"Identity",
-            (void (*)(const float*, float*, int))(
-                launch_kernel<identity_kernel>),
-            grid, block}
-    };
+    kernels.push_back({
+        "Identity",
+        [grid, block] (const float* x, float* y, int m) {
+            identity_kernel<<<grid, block>>>(x, y, m);
+        },
+        grid, block
+    });
+
+    kernels.push_back({
+        "SSS",
+        [grid, block] (const float* x, float* y, int m) {
+            sss_forward_kernel<<<grid, block>>>(x, y, m);
+        },
+        grid, block
+    });
 
     for (auto& k : kernels) {
         float per_ms = benchmark(k, x, y, n, iters);
