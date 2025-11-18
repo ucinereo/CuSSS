@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <functional>
 
 #define CUDA_CHECK(err) \
     if (err != cudaSuccess) { \
