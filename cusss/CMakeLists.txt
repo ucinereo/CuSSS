@@ -41,6 +41,12 @@ add_library(cusss SHARED
     "cuda/include/sss_impl.hpp"
     "cuda/src/sss_impl.cu"
 
+    # XSSS Kernel
+    "cpp/include/xsss.hpp"
+    "cpp/src/xsss.cpp"
+    "cuda/include/xsss_impl.hpp"
+    "cuda/src/xsss_impl.cu"
+
     # @TODO: Add other SSS variants here
 )
 
