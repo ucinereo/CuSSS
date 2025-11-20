@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <functional>
+#include "kernel_src/all_kernels_import.hpp"
 
 #define CUDA_CHECK(err) \
     if (err != cudaSuccess) { \
@@ -8,31 +9,6 @@
                   << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
         exit(1); \
     }
-
-// Kernels
-__global__ void sss_forward_kernel(const float* x, float* output, int size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        float e = x[idx];
-        float inv = __frcp_rn(1.0f + fabsf(e));
-        output[idx] = (e * inv) * 0.5f + 0.5f;
-    }
-}
-
-__global__ void sigmoid_forward_kernel(const float* x, float* output, int size) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < size) {
-    float e = x[idx];
-    output[idx] = __frcp_rn(1.0f + __expf(-e));
-  }
-}
-
-__global__ void identity_kernel(const float* x, float* output, int size) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < size) {
-    output[idx] = x[idx];
-  }
-}
 
 // ------------------------------------------------------------
 // A wrapper for ANY kernel with signature:
