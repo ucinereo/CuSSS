@@ -46,7 +46,7 @@ python3 benchmarks/pytorch_benchmarks/sss_sigmoid_benchmark.py
 
 ### Benchmark SSS forward vs Sigmoid forward kernels
 ```bash
-nvcc benchmarks/cuda_benchmarks/kernel_benchmark.cu -O3 -o ./build/cuda_benchmark
+cmake -S benchmarks/cuda_benchmarks/ -B build && cmake --build build --parallel --target cuda_benchmark
 ./build/cuda_benchmark
 ```
 
