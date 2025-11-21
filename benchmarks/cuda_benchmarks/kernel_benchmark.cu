@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <functional>
-#include "kernel_src/all_kernels_import.hpp"
+#include "all_kernels_import.hpp"
 
 #define CUDA_CHECK(err) \
     if (err != cudaSuccess) { \
