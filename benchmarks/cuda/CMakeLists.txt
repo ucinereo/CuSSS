@@ -44,12 +44,12 @@ add_executable(cuda_benchmark
     "../../cusss/cpp/src/sss.cpp"
     "../../cusss/cuda/include/sss_impl.hpp"
     "../../cusss/cuda/src/sss_impl.cu"
-    "all_kernels_import.hpp"
-    "baseline_kernels/baseline_kernels.cu"
-    "baseline_kernels/baseline_kernels.hpp"
+    "src/kernels/all_kernels_import.hpp"
+    "src/kernels/baseline_kernels/baseline_kernels.cu"
+    "src/kernels/baseline_kernels/baseline_kernels.hpp"
 
     # Add the source containing main()
-    "kernel_benchmark.cu"  # <- Make sure this is the file with main()
+    "src/kernel_benchmark.cu"
 )
 
 target_include_directories(cuda_benchmark PRIVATE
