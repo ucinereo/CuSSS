@@ -1,13 +1,37 @@
 #include "sss_impl.hpp"
 
 #include <cuda.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <torch/script.h>
 
 using namespace torch::indexing;
 using namespace torch::autograd;
+using namespace c10;
 
 using torch::Tensor;
 using torch::TensorOptions;
+
+
+
+// ===================================================================
+// HELPER FUNCTIONS
+inline std::pair<int, int> getLaunchConfig(int n) {
+    // Pytorch uses a 512 threads and a constant 32 elements per thread.
+    const int threads = 512;
+    const int elements_per_thread = 32;
+    int bws = threads * elements_per_thread;
+
+    int device, sm_count;
+    cudaGetDevice(&device);
+    cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device);
+
+    // PyTorch heuristic: 4 blocks per SM
+    int max_blocks = sm_count * 4;
+    int blocks = (n + bws - 1) / bws;
+    // blocks = std::min(blocks, max_blocks);
+    return {blocks, threads};
+}
 
 
 // ===================================================================
@@ -15,10 +39,11 @@ using torch::TensorOptions;
 
 __global__ void sss_forward_kernel(const float* x, float* output, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        float e = x[idx];
+
+    for (int i = idx; i < size; i += blockDim.x * gridDim.x) {
+        float e = x[i];
         float inv = __frcp_rn(1.0f + fabsf(e));
-        output[idx] = (e * inv) * 0.5f + 0.5f;
+        output[i] = (e * inv) * 0.5f + 0.5f;
     }
 }
 
@@ -136,11 +161,11 @@ torch::Tensor forward_cuda(torch::Tensor &x) {
     auto output = torch::empty_like(x);
     int size = x.numel();
 
-    // @TODO: Better kernel launch configuration
-    int blockSize = 256;
-    int numBlocks = (size + blockSize - 1) / blockSize;
+    auto[blocks, threads] = getLaunchConfig(size);
+    const auto stream = c10::cuda::getCurrentCUDAStream(x.get_device());
+    const c10::cuda::CUDAStreamGuard guard(stream);
 
-    sss_forward_kernel<<<numBlocks, blockSize>>>(
+    sss_forward_kernel<<<blocks, threads, 0, stream>>>(
         x.data_ptr<float>(), output.data_ptr<float>(), size
     );
 
@@ -182,11 +207,13 @@ torch::Tensor forward_cuda_f4(torch::Tensor &x) {
     int size = x.numel();
     
     // @TODO: Better kernel launch configuration
-    int blockSize = 256;
     int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
 
-    sss_forward_kernel_f4<<<numBlocks, blockSize>>>(
+    auto[blocks, threads] = getLaunchConfig(size);
+    const auto stream = c10::cuda::getCurrentCUDAStream(x.get_device());
+    const c10::cuda::CUDAStreamGuard guard(stream);
+
+    sss_forward_kernel_f4<<<blocks, threads, 0, stream>>>(
         x.data_ptr<float>(), output.data_ptr<float>(), size
     );
 
