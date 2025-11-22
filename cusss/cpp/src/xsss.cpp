@@ -16,7 +16,7 @@ torch::Tensor xSSS::forward(Tensor x, Tensor a) {
 }
 
 
-TORCH_LIBRARY(sss, m) {
+TORCH_LIBRARY(xsss, m) {
     m.class_<xSSS>("xSSS")
         .def(torch::init<>(), "", {})
         .def("forward", &xSSS::forward)

@@ -55,7 +55,7 @@ def compare_and_print_results(results, baseline_key, func_type):
             pct_colored = pct_fmt
 
         print(
-            f"{name:25s}  "
+            f"{name:35s}  "
             f"{s['mean']:10.3f} ms  "
             f"{s['p5']:10.3f} ms  "
             f"{s['p95']:10.3f} ms  "
@@ -66,7 +66,7 @@ def compare_and_print_results(results, baseline_key, func_type):
 
     print()
 
-def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str, torch.nn.Module], tensor_sizes : list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
+def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str, torch.nn.Module], tensor_sizes : list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000], number_inputs: int = 1):
     """
     Generic benchmark function which takes some modules (here for the activation functions) and records the time 
     it takes to apply the forward and backward functions each 100 times. On cuda-device.
@@ -86,6 +86,7 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
         batch_size = 64
         x = torch.randn(batch_size, size, device=device, requires_grad=True)
+        a = torch.randn(1, device=device, requires_grad=True) # for xSSS
 
         title = f"| Tensor size ({batch_size}, {size:_}) |"
         print("-" * len(title))
@@ -102,7 +103,10 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
             # Forward pass:
             # Warm-up
             for _ in range(WARMUP_PASSES):
-                y = activ_fn(x)
+                if number_inputs == 2:
+                    y = activ_fn(x, a)
+                else:
+                    y = activ_fn(x)
 
             forward_passes_times = []
 
@@ -114,7 +118,10 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
                 end = torch.cuda.Event(enable_timing=True)
                 start.record()
                 for _ in range(PASSES_PER_MEASUREMENT):
-                    y = activ_fn(x)
+                    if number_inputs == 2:
+                        y = activ_fn(x, a)
+                    else:
+                        y = activ_fn(x)
                 end.record()
                 torch.cuda.synchronize()
                 forward_passes_times.append(start.elapsed_time(end))
