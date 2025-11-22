@@ -7,3 +7,6 @@ CuSSS.egg-info/
 benchmarks/results/**
 !benchmarks/results/
 !benchmarks/results/**/
+
+# Profiling
+.profile_traces
