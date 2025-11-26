@@ -26,6 +26,7 @@ del output_native
 nvtx.range_pop()
 
 # --- REGION B: Custom Kernel ---
+sss = SSS().to(device)
 nvtx.range_push("B: Custom Kernel")
 # output_custom = my_custom_kernel(x, y)
 output_custom = sss(x)
