@@ -1,8 +1,9 @@
 #include "sss_impl.hpp"
+#include "../../utils/template_utils.hpp"
+#include <cuda_bf16.h>
 
 #include <cuda.h>
 #include <torch/script.h>
-
 using namespace torch::indexing;
 using namespace torch::autograd;
 
@@ -13,22 +14,21 @@ using torch::TensorOptions;
 // ===================================================================
 // CUDA KERNELS
 
-__global__ void sss_forward_kernel(const float* x, float* output, int size) {
+template <typename scalar_t>
+__global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
-        float e = x[idx];
-        float inv = __frcp_rn(1.0f + fabsf(e));
-        output[idx] = (e * inv) * 0.5f + 0.5f;
+        scalar_t e = x[idx];
+        output[idx] = sss_elementwise_op<scalar_t>::forward(e);
     }
 }
 
-__global__ void sss_backward_kernel(const float* x, const float* grad_out, float* grad_x, int size) {
+template <typename scalar_t>
+__global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out, scalar_t* grad_x, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
-        float e = x[idx];
-        float inv = __frcp_rn(1.0f + fabsf(e));
-        float grad = inv * inv * 0.5f;
-        grad_x[idx] = grad_out[idx] * grad;
+        scalar_t e = x[idx];
+        grad_x[idx] = sss_elementwise_op<scalar_t>::backward(e, grad_out[idx]);
     }
 }
 
