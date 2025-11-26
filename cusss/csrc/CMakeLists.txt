@@ -36,17 +36,16 @@ find_package(Torch 2.0 REQUIRED)
 
 add_library(cusss SHARED
     # SSS Kernel
-    #"cpp/include/sss.hpp"
-    "cpp/src/sss.cpp"
-    #"cuda/include/sss_impl.hpp"
-    "cuda/src/sss_impl.cu"
+    "ops/sss.cpp"
+    "cuda/sss_impl.cu"
 
     # @TODO: Add other SSS variants here
 )
 
 target_include_directories(cusss PRIVATE
-    ${CMAKE_SOURCE_DIR}/cuda/include
-    ${CMAKE_SOURCE_DIR}/cpp/include
+    ${CMAKE_SOURCE_DIR}/cuda
+    ${CMAKE_SOURCE_DIR}/ops
+    ${Python_INCLUDE_DIRS}
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     ${TORCH_INCLUDE_DIRS}
 )

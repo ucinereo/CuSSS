@@ -1,5 +1,5 @@
 import torch
-from cusss.ops.sss_wrappers import SSS, SSS_f4
+from cusss import SSS
 from generic_benchmark import benchmark_on_cuda
 
 from megatron.core.jit import jit_fuser
@@ -23,16 +23,9 @@ if __name__ == "__main__":
 
     sss_megatron = SSSMegatron()
     sss_cuda = SSS()
-    sss_cuda_f4 = SSS_f4()
-    sigmoid = torch.nn.Sigmoid()
-    relu = torch.nn.ReLU()
+    # sss_cuda_f4 = SSS_f4()
+    sigmoid = torch.nn.Sigmoid()  
+    relu = torch.nn.ReLU()  
+    iden = torch.nn.Identity()
 
-    benchmark_on_cuda(
-        modules={
-            "SSS Megatron": sss_megatron,
-            "SSS Cuda Naive": sss_cuda,
-            "SSS Cuda float4": sss_cuda_f4,
-            "ReLU torch": relu,
-        },
-        baseline=("Sigmoid torch", sigmoid),
-    )
+    benchmark_on_cuda(modules={"SSS Megatron": sss_megatron, "SSS Cuda Naive": sss_cuda, "ReLU torch": relu, "Identity torch": iden}, baseline=("Sigmoid torch", sigmoid))

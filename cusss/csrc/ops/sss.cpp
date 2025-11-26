@@ -21,7 +21,12 @@ struct SSSFunction : public torch::autograd::Function<SSSFunction> {
     static at::Tensor forward(torch::autograd::AutogradContext *ctx,
                               const at::Tensor& x) {
         ctx->save_for_backward({x});
-        return sss_forward_cuda(x);
+        at::AutoDispatchBelowADInplaceOrView guard;
+        static auto op = torch::Dispatcher::singleton()
+            .findSchemaOrThrow("sss::forward", "")
+            .typed<decltype(sss_forward_cuda)>();
+        
+        return op.call(x);
     }
 
     static torch::autograd::tensor_list backward(
@@ -42,6 +47,11 @@ at::Tensor sss_forward_autograd(const at::Tensor& x) {
 
 TORCH_LIBRARY(sss, m) {
     m.def("forward(Tensor x) -> Tensor");
+}
+
+// 4. Register Backend Implementations (CUDA)
+TORCH_LIBRARY_IMPL(sss, CUDA, m) {
+    m.impl("forward", sss_forward_cuda);
 }
 
 // AUTOGRAD implementation (calls C++ autograd::Function)
