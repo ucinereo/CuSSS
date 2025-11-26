@@ -1,62 +1,90 @@
 #include "sss.hpp"
-#include "sss_impl.hpp"
+#include "sss_cuda.hpp"
 
-#include <iostream>
-#include <torch/script.h>
-
-#include <ATen/ATen.h>
+#include <torch/extension.h>
 #include <torch/library.h>
 
-using namespace std;
-using namespace torch::indexing;
-using namespace torch::autograd;
+using torch::autograd::Function;
+using torch::autograd::AutogradContext;
+using torch::autograd::tensor_list;
 
 using torch::Tensor;
 
-// ----- Autograd-Enabled Ops -----
+// To register a backward formula, we need to construct a custom autograd function
+struct SSSFunction : public Function<SSSFunction> {
 
-// C++ autograd Function wrapper
-struct SSSFunction : public torch::autograd::Function<SSSFunction> {
-    
-    static at::Tensor forward(torch::autograd::AutogradContext *ctx,
-                              const at::Tensor& x) {
-        ctx->save_for_backward({x});
+    static at::Tensor forward(AutogradContext *ctx, const at::Tensor& x) {
+        // It is important that the forward looks like this.
+        // If not, it can lead to the operator being silently not correct.
+        // Source: https://docs.google.com/document/d/1_W62p8WJOQQUzPsJYa7s701JXt0qf2OfLub2sbkHOaU/edit?tab=t.0#bookmark=id.gcevr8cskv86
+
+        // We first need to construct a guard to disable AD dispatching for inplace or view operations.
+        // Intuitively, this prevents the autograd engine from trying to record operations that would cause infinite recursion.
+        // This is necessary to avoid infinite recursion in certain cases.
         at::AutoDispatchBelowADInplaceOrView guard;
+
+        // Now we fetch the correct implementation.
+        // To allow for backend-specific implementations, we use the dispatcher to find the correct implementation.
+        // This also enables the use of JIT compilation and other optimizations for torchscript.
         static auto op = torch::Dispatcher::singleton()
             .findSchemaOrThrow("sss::forward", "")
             .typed<decltype(sss_forward_cuda)>();
         
+        // We may save tensors or other data for backwards.
+        ctx->save_for_backward({x});
+        
+        // Finally, we call the implementation.
         return op.call(x);
     }
 
-    static torch::autograd::tensor_list backward(
-        torch::autograd::AutogradContext *ctx,
-        torch::autograd::tensor_list grad_outputs) 
-    {
+    static tensor_list backward(AutogradContext *ctx, tensor_list grad_outputs) {
+        // Retrieve the saved tensors
         auto saved = ctx->get_saved_variables();
         auto x = saved[0];
         auto gy = grad_outputs[0];
-        return {sss_backward_cuda(x, gy)};
+
+        // Again, we need to request the dispatcher for the correct implementation.
+        static auto op = torch::Dispatcher::singleton()
+            .findSchemaOrThrow("sss::backward", "")
+            .typed<decltype(sss_backward_cuda)>();
+
+        return {op.call(x, gy)};
     }
 };
 
-// This is what Autograd dispatch calls
+// This is what autograd will call.
 at::Tensor sss_forward_autograd(const at::Tensor& x) {
     return SSSFunction::apply(x);
 }
 
+// ===================================================================
+// PyTorch Library Registration
+
+// First we define the operator schema (independent of backend)
+// This is what users will call.
 TORCH_LIBRARY(sss, m) {
     m.def("forward(Tensor x) -> Tensor");
+    m.def("backward(Tensor x, Tensor grad_out) -> Tensor");
 }
 
-// 4. Register Backend Implementations (CUDA)
+// CUDA implementation (found via dispatcher if input is on CUDA)
 TORCH_LIBRARY_IMPL(sss, CUDA, m) {
     m.impl("forward", sss_forward_cuda);
+    m.impl("backward", sss_backward_cuda);
 }
 
-// AUTOGRAD implementation (calls C++ autograd::Function)
+// AUTOGRAD implementation (found via dispatcher if autograd is enabled)
 TORCH_LIBRARY_IMPL(sss, Autograd, m) {
     m.impl("forward", sss_forward_autograd);
+    // Note that we don't need to register backward here. The autograd engine will call SSSFunction::backward automatically.
 }
+
+// CPU implementation (not implemented)
+/*
+TORCH_LIBRARY_IMPL(sss, CPU, m) {
+    m.impl("forward", sss_forward_cpu);
+}
+*/
+
 
 

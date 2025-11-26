@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from cusss.ops.sss_wrappers import SSS
+from cusss import SSS
 
 
 @pytest.fixture
