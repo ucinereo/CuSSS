@@ -31,5 +31,7 @@ public:
 
 torch::Tensor forward_cuda_f4(Tensor &x);
 std::vector<torch::Tensor> backward_cuda_f4(Tensor &x, Tensor &grad_outputs);
-
+#ifdef __CUDACC__ // Such that only NVCC will read the following line
+__global__ void sss_forward_kernel(const float* x, float* output, int size);
+#endif
 #endif

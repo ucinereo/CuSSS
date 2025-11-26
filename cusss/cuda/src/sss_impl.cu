@@ -126,6 +126,100 @@ __global__ void sss_backward_tail_kernel(const float* x, const float* grad_out, 
     }
 }
 
+__global__ void sss_forward_kernel_f4(const float* x, float* output, int size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // index in units of float4
+    int i4 = tid;
+    int base = i4 * 4;
+
+    if (base + 3 < size) {
+        // vectorized load
+        float4 v = reinterpret_cast<const float4*>(x)[i4];
+
+        // Explicit scalar lanes
+        float e0 = v.x;
+        float e1 = v.y;
+        float e2 = v.z;
+        float e3 = v.w;
+
+        // elementwise SSS computation
+        float o0 = (e0 * __frcp_rn(1.0f + fabsf(e0))) * 0.5f + 0.5f;
+        float o1 = (e1 * __frcp_rn(1.0f + fabsf(e1))) * 0.5f + 0.5f;
+        float o2 = (e2 * __frcp_rn(1.0f + fabsf(e2))) * 0.5f + 0.5f;
+        float o3 = (e3 * __frcp_rn(1.0f + fabsf(e3))) * 0.5f + 0.5f;
+
+        // pack results
+        float4 out;
+        out.x = o0;
+        out.y = o1;
+        out.z = o2;
+        out.w = o3;
+
+        // vectorized store
+        reinterpret_cast<float4*>(output)[i4] = out;
+    }
+}
+
+__global__ void sss_forward_tail_kernel(const float* x, float* output, int start, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x + start;
+    if (idx < size) {
+        float e = x[idx];
+        float inv = __frcp_rn(1.0f + fabsf(e));
+        output[idx] = (e * inv) * 0.5f + 0.5f;
+    }
+}
+
+__global__ void sss_backward_kernel_f4(const float* x, const float* grad_out, float* grad_x, int size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // index in units of float4
+    int i4 = tid;
+    int base = i4 * 4;
+
+    if (base + 3 < size) {
+        // vectorized load
+        float4 v = reinterpret_cast<const float4*>(x)[i4];
+        float4 g = reinterpret_cast<const float4*>(grad_out)[i4];
+
+        // Explicit scalar lanes
+        float e0 = v.x;
+        float e1 = v.y;
+        float e2 = v.z;
+        float e3 = v.w;
+
+        // elementwise SSS computation
+        float inv0 = __frcp_rn(1.0f + fabsf(e0));
+        float o0 = (inv0 * inv0) * 0.5f;
+        float inv1 = __frcp_rn(1.0f + fabsf(e1));
+        float o1 = (inv1 * inv1) * 0.5f;
+        float inv2 = __frcp_rn(1.0f + fabsf(e2));
+        float o2 = (inv2 * inv2) * 0.5f;
+        float inv3 = __frcp_rn(1.0f + fabsf(e3));
+        float o3 = (inv3 * inv3) * 0.5f;
+
+        // pack results
+        float4 out;
+        out.x = g.x * o0;
+        out.y = g.y * o1;
+        out.z = g.z * o2;
+        out.w = g.w * o3;
+
+        // vectorized store
+        reinterpret_cast<float4*>(grad_x)[i4] = out;
+    } 
+}
+
+__global__ void sss_backward_tail_kernel(const float* x, const float* grad_out, float* grad_x, int start, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x + start;
+    if (idx < size) {
+        float e = x[idx];
+        float inv = __frcp_rn(1.0f + fabsf(e));
+        float grad = inv * inv * 0.5f;
+        grad_x[idx] = grad_out[idx] * grad;
+    }
+}
+
 // ===================================================================
 // FORWARD AND BACKWARD IMPLEMENTATIONS
 
