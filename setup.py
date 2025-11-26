@@ -29,7 +29,7 @@ class CMakeBuild(build_ext):
         """Setup cmake build.
         """
         root = Path(__file__).resolve().parent
-        source_dir = root / "cusss"
+        source_dir = root / "cusss" / "csrc"
         build_dir = root / "build" / "cmake-build"
         install_dir = Path(self.build_lib).resolve() / "cusss"
 

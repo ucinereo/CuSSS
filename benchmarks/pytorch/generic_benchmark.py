@@ -94,7 +94,7 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
         print()
 
         all_forward_results = {}
-        all_backward_results = {}
+        # all_backward_results = {}
 
         for module_name in modules:
             activ_fn = modules[module_name].to(device)
@@ -121,32 +121,32 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
             all_forward_results[module_name] = forward_passes_times
 
-            # Backward pass:
-            loss = y.sum()
+            # # Backward pass:
+            # loss = y.sum()
 
-            # Warm-up
-            for _ in range(WARMUP_PASSES):
-                loss.backward(retain_graph=True)
+            # # Warm-up
+            # for _ in range(WARMUP_PASSES):
+            #     loss.backward(retain_graph=True)
 
-            backward_passes_times = []
+            # backward_passes_times = []
 
-            # Take multiple measurements
-            for _ in range(MEASUREMENTS):
-                # Measure time for multiple backward passes
-                torch.cuda.synchronize()
-                start = torch.cuda.Event(enable_timing=True)
-                end = torch.cuda.Event(enable_timing=True)
-                start.record()
-                for _ in range(PASSES_PER_MEASUREMENT):
-                    loss.backward(retain_graph=True)
-                end.record()
-                torch.cuda.synchronize()
-                backward_passes_times.append(start.elapsed_time(end))
+            # # Take multiple measurements
+            # for _ in range(MEASUREMENTS):
+            #     # Measure time for multiple backward passes
+            #     torch.cuda.synchronize()
+            #     start = torch.cuda.Event(enable_timing=True)
+            #     end = torch.cuda.Event(enable_timing=True)
+            #     start.record()
+            #     for _ in range(PASSES_PER_MEASUREMENT):
+            #         loss.backward(retain_graph=True)
+            #     end.record()
+            #     torch.cuda.synchronize()
+            #     backward_passes_times.append(start.elapsed_time(end))
 
-            all_backward_results[module_name] = backward_passes_times
+            # all_backward_results[module_name] = backward_passes_times
 
         compare_and_print_results(all_forward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Forward passes")
-        compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
+        # compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
 
     return
 
