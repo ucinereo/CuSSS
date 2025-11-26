@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
+#include <nlohmann/json.hpp>
 
 #define CUDA_CHECK(err) \
     if (err != cudaSuccess) { \
@@ -17,7 +18,7 @@
 // Helper functions to compute and print statistics
 // ------------------------------------------------------------
 struct Stats {
-    float mean, median, p5, p95, min, median_throughput, highest_throughput;
+    float mean, median, p5, p95, min, median_throughput;
 };
 
 Stats compute_stats(std::vector<float>& v, int n) {
@@ -29,12 +30,11 @@ Stats compute_stats(std::vector<float>& v, int n) {
     s.p95 = v[std::min(int(0.95*v.size()), int(v.size()-1))];
     s.min = v[0];
     s.median_throughput = 2.0f * n * sizeof(float) / (s.median * 1e6f); // GB/s                
-    s.highest_throughput = 2.0f * n * sizeof(float) / (s.min * 1e6f); // GB/s    
     return s;
 }
 
 void print_block_divider() {
-    std::cout << std::string(114, '-') << std::endl;  // separator
+    std::cout << std::string(87, '-') << std::endl;  // separator
 }
 
 void print_header() {
@@ -48,7 +48,6 @@ void print_header() {
               << std::setw(10) << "P5(ms)"
               << std::setw(10) << "P95(ms)"
               << std::setw(27) << "Median Throughput(GB/s)"
-              << std::setw(27) << "Highest Throughput(GB/s)"
               << std::endl;
 
     print_block_divider();
@@ -81,7 +80,6 @@ void print_result(const std::string& name, int n, int block,
               << std::setw(10) << s.p5
               << std::setw(10) << s.p95
               << std::setw(27) << s.median_throughput
-              << std::setw(27) << s.highest_throughput
               << std::endl;
 }
 
@@ -112,7 +110,6 @@ void launch_kernel(dim3 grid, dim3 block,
 std::vector<float> benchmark(const KernelWrapper& k,
                 const float* x, float* y, int n, int iters)
 {
-
     std::vector<float> measurements(iters, 0);
 
     // Warmup
@@ -127,8 +124,10 @@ std::vector<float> benchmark(const KernelWrapper& k,
         CUDA_CHECK(cudaEventCreate(&start));
         CUDA_CHECK(cudaEventCreate(&end));
 
-        CUDA_CHECK(cudaEventRecord(start));        
+        CUDA_CHECK(cudaEventRecord(start));       
+
         k.func(x, y, n, k.grid, k.block);
+
         CUDA_CHECK(cudaEventRecord(end));
         CUDA_CHECK(cudaEventSynchronize(end));
 
@@ -138,11 +137,7 @@ std::vector<float> benchmark(const KernelWrapper& k,
 
         CUDA_CHECK(cudaEventDestroy(start));
         CUDA_CHECK(cudaEventDestroy(end));
-    }
-
-    
-
-   
+    }   
 
     return measurements;
 }
@@ -152,9 +147,9 @@ std::vector<float> benchmark(const KernelWrapper& k,
 // ------------------------------------------------------------
 
 
-
 int main() {
 
+    // Benchmarking parameters:
     const int iters = 500;
 
     std::vector<int> tensor_sizes = {1<<18, 1<<20, 1<<22, 1<<24, 1<<26, 1<<28};
@@ -163,7 +158,7 @@ int main() {
     // Register kernels in a vector
     std::vector<KernelWrapper> kernels;
 
-
+    // Initialize block and grid to value 0 (gets adjusted in the benchmarking-for-loop anyways)
     dim3 block(0);
     dim3 grid(0);
 
@@ -191,8 +186,13 @@ int main() {
         grid, block
     });
 
+    nlohmann::json results_json;
+
+    results_json["results"] = nlohmann::json::array();
 
     float *x, *y;
+    // For each tensor-size, go over all block-sizes and benchmark each kernel
+    // Then print the results to the command line and save them for the JSON-file
     for (int n : tensor_sizes) {
         int bytes = n * sizeof(float);
         CUDA_CHECK(cudaMalloc(&x, bytes));
@@ -209,11 +209,18 @@ int main() {
                 k.grid = grid;
                 k.block = block;
                 std::vector<float> measurements = benchmark(k, x, y, n, iters);
+                
+                // Prints the command-line stats
                 Stats s = compute_stats(measurements, n);
-                            
-
-
                 print_result(k.name, n, b, s);
+                
+                // Creates and entry for the JSON
+                nlohmann::json entry;
+                entry["kernel"] = k.name;
+                entry["tensor_size_bytes"] = n * sizeof(float);
+                entry["block_size"] = block.x;
+                entry["measurements_ms"] = measurements;
+                results_json["results"].push_back(entry);
 
             }        
             
@@ -225,6 +232,13 @@ int main() {
         cudaFree(x);
         cudaFree(y);
     }
+
+    // Save results in JSON-file for further visualizations
+    std::string json_file_path = "benchmarks/results/cuda.json";
+    std::cout << "Storing results in " << json_file_path << std::endl;
+    std::ofstream f(json_file_path);
+    f << results_json.dump(2);   // pretty printed
+    f.close();
 
     return 0;
 }
