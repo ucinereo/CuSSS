@@ -36,9 +36,9 @@ find_package(Torch 2.0 REQUIRED)
 
 add_library(cusss SHARED
     # SSS Kernel
-    #"cpp/include/sss.hpp"
+    "cpp/include/sss.hpp"
     "cpp/src/sss.cpp"
-    #"cuda/include/sss_impl.hpp"
+    "cuda/include/sss_impl.hpp"
     "cuda/src/sss_impl.cu"
 
     # @TODO: Add other SSS variants here

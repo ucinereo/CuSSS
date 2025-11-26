@@ -10,28 +10,6 @@ using namespace torch::autograd;
 
 using torch::Tensor;
 
-class SSS : public torch::CustomClassHolder {
+at::Tensor sss_forward_autograd(const at::Tensor& x);
 
-public:
-  SSS() {}
-
-  Tensor forward(Tensor x);
-
-  std::vector<Tensor> __getstate__() { return {}; }
-
-  void __setstate__(const std::vector<Tensor> &state) { return; }
-};
-
-class SSS_f4 : public torch::CustomClassHolder {
-
-public:
-  SSS_f4() {}
-
-  Tensor forward(Tensor x);
-
-  std::vector<Tensor> __getstate__() { return {}; }
-
-  void __setstate__(const std::vector<Tensor> &state) { return; }
-};
-
-#endif
+#endif 
