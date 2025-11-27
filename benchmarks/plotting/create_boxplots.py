@@ -167,9 +167,12 @@ def boxplots_cuda(device_name):
                     remaining_ax.set_visible(False)
 
                 plt.tight_layout(rect=(0, 0, 1, 0.96))
+                svg_path = os.path.join(base, f"../results/svgs_cuda/boxplots_cuda_{size_str.replace(".", "_")}.svg")            
+                fig.savefig(svg_path)
                 pdf.savefig(fig)
                 plt.close(fig)
 
+# This function does not work yet, as we do not generate this data and it probably wont have the "block" attribute
 def boxplots_pytorch(device_name):
 
     # -----------------------------
@@ -291,6 +294,8 @@ def boxplots_pytorch(device_name):
 
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
+            svg_path = os.path.join(base, f"../results/svgs_pytorch/boxplots_pytorch_{size_str.replace(".", "_")}.svg")            
+            fig.savefig(svg_path)
             pdf.savefig(fig)
             plt.close(fig)
         
