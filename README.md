@@ -51,5 +51,14 @@ cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cu
 ./build/cuda_benchmark
 ```
 
+### Visualize CUDA results
+```bash
+python3 benchmarks/plotting/create_boxplots.py GH200
+```
+The resulting plot will be generated at benchmarks/results/boxplots_cuda.pdf <br>
+If you have executed the benchmark on another GPU:
+- Add the GPU to benchmarks/device_specs/gpus.json
+- Adjust the argument "GH200" in the CUDA benchmarking call
+
 # Acknowledgments
 - Cuda implementation of [xielu](https://github.com/rubber-duck-debug/xielu) for repository structure.
