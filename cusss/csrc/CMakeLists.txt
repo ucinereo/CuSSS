@@ -43,8 +43,8 @@ add_library(cusss SHARED
 )
 
 target_include_directories(cusss PRIVATE
-    ${CMAKE_SOURCE_DIR}/cuda
-    ${CMAKE_SOURCE_DIR}/ops
+    ${CMAKE_CURRENT_SOURCE_DIR}/cuda
+    ${CMAKE_CURRENT_SOURCE_DIR}/ops
     ${Python_INCLUDE_DIRS}
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )

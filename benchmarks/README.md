@@ -20,7 +20,7 @@ cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cu
 ```
 ### Add other existing kernel implementations
 In benchmarks/cuda_benchmarks/all_kernels_import.hpp: 
-- Add an import for the header file which references the kernel (such as #include "../../cusss/cuda/include/sss_impl.hpp" for SSS)
+- Add an import for the header file which references the kernel (such as #include "../../../../cusss/csrc/cuda/sss_cuda.hpp" for SSS)
 - Add the kernel in the kernel_benchmark.cu main() function (note that some kernels may have more parameters, such as parameter "a" in xSSS. Here is an example of how that may look like:)
     kernels.push_back({
         "xSSS",
