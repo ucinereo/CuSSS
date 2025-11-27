@@ -29,8 +29,8 @@ If you have executed the benchmark on another GPU:
 - Adjust the argument "GH200" in the CUDA benchmarking call
 
 ### Add other existing kernel implementations
-In benchmarks/cuda_benchmarks/all_kernels_import.hpp:
-- Add an import for the header file which references the kernel (such as #include "../../cusss/cuda/include/sss_impl.hpp" for SSS)
+In benchmarks/cuda_benchmarks/all_kernels_import.hpp: 
+- Add an import for the header file which references the kernel (such as #include "../../../../cusss/csrc/cuda/sss_cuda.hpp" for SSS)
 - Add the kernel in the kernel_benchmark.cu main() function (note that some kernels may have more parameters, such as parameter "a" in xSSS. Here is an example of how that may look like:)
 ```cpp
     kernels.push_back({
