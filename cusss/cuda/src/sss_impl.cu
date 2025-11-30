@@ -113,7 +113,7 @@ __global__ void sss_backward_kernel_f4(const float* x, const float* grad_out, fl
 
         // vectorized store
         reinterpret_cast<float4*>(grad_x)[i4] = out;
-    } 
+    }
 }
 
 __global__ void sss_backward_tail_kernel(const float* x, const float* grad_out, float* grad_x, int start, int size) {
@@ -180,7 +180,7 @@ torch::Tensor forward_cuda_f4(torch::Tensor &x) {
     x = x.contiguous();
     auto output = torch::empty_like(x).contiguous();
     int size = x.numel();
-    
+
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
     int num4 = size/4;
@@ -233,10 +233,10 @@ std::vector<torch::Tensor> backward_cuda_f4(torch::Tensor &x, torch::Tensor &gra
         int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
 
         sss_backward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
-            x.data_ptr<float>(), 
+            x.data_ptr<float>(),
             grad_outputs.data_ptr<float>(),
-            grad_x.data_ptr<float>(), 
-            num4 * 4, 
+            grad_x.data_ptr<float>(),
+            num4 * 4,
             size
         );
     }

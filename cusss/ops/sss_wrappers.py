@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 
 class SSS(torch.nn.Module):
@@ -17,9 +16,7 @@ class SSS(torch.nn.Module):
             # Use the custom backward operation
             x = ctx.saved_tensors[0]
 
-            grad_x = sss_backward(
-                x, grad_output
-            )
+            grad_x = sss_backward(x, grad_output)
 
             # Return gradients in the same order as forward inputs
             return grad_x
@@ -61,6 +58,7 @@ def _(x: torch.Tensor, grad_output: torch.Tensor) -> torch.Tensor:
 
 # Same definition for float4
 
+
 class SSS_f4(torch.nn.Module):
     """SSS torch implementation"""
 
@@ -76,9 +74,7 @@ class SSS_f4(torch.nn.Module):
             # Use the custom backward operation
             x = ctx.saved_tensors[0]
 
-            grad_x = sss_backward_f4(
-                x, grad_output
-            )
+            grad_x = sss_backward_f4(x, grad_output)
 
             # Return gradients in the same order as forward inputs
             return grad_x
@@ -91,6 +87,7 @@ class SSS_f4(torch.nn.Module):
 
     def forward_inference(self, x: torch.Tensor) -> torch.Tensor:
         return self.SSSFunction_f4.apply(x)
+
 
 # Custom ops for torch.script compatibility.
 @torch.library.custom_op("sss_f4::sss_forward", mutates_args=())
