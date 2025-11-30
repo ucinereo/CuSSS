@@ -2,6 +2,7 @@ build/
 .vscode/
 __pycache__/
 CuSSS.egg-info/
+cluster/
 
 # Ignore all the content of results, but keep all directories
 benchmarks/results/**

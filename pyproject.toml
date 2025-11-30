@@ -24,6 +24,6 @@ zip-safe = false
 packages = ["cusss.ops"]
 
 [project.optional-dependencies]
-tests = [
-    "unittest",
+dev = [
+    "pytest",
 ]
