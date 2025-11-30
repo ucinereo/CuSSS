@@ -29,7 +29,7 @@ Stats compute_stats(std::vector<float>& v, int n) {
     s.p5 = v[std::max(int(0.05*v.size()), 0)];
     s.p95 = v[std::min(int(0.95*v.size()), int(v.size()-1))];
     s.min = v[0];
-    s.median_throughput = 2.0f * n * sizeof(float) / (s.median * 1e6f); // GB/s                
+    s.median_throughput = 2.0f * n * sizeof(float) / (s.median * 1e6f); // GB/s
     return s;
 }
 
@@ -89,7 +89,7 @@ void print_result(const std::string& name, int n, int block,
 // ------------------------------------------------------------
 struct KernelWrapper {
     std::string name;
-    std::function<void (const float*, float*, int, dim3, dim3)> func; 
+    std::function<void (const float*, float*, int, dim3, dim3)> func;
     dim3 grid;
     dim3 block;
 };
@@ -115,8 +115,8 @@ std::vector<float> benchmark(const KernelWrapper& k,
     // Warmup
     for (int i = 0; i < 100; i++) {
         k.func(x, y, n, k.grid, k.block);
-    }    
-    
+    }
+
     for (int i = 0; i < iters; i++) {
         CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -124,7 +124,7 @@ std::vector<float> benchmark(const KernelWrapper& k,
         CUDA_CHECK(cudaEventCreate(&start));
         CUDA_CHECK(cudaEventCreate(&end));
 
-        CUDA_CHECK(cudaEventRecord(start));       
+        CUDA_CHECK(cudaEventRecord(start));
 
         k.func(x, y, n, k.grid, k.block);
 
@@ -137,7 +137,7 @@ std::vector<float> benchmark(const KernelWrapper& k,
 
         CUDA_CHECK(cudaEventDestroy(start));
         CUDA_CHECK(cudaEventDestroy(end));
-    }   
+    }
 
     return measurements;
 }
@@ -197,7 +197,7 @@ int main() {
         int bytes = n * sizeof(float);
         CUDA_CHECK(cudaMalloc(&x, bytes));
         CUDA_CHECK(cudaMalloc(&y, bytes));
-        
+
         print_header();
 
         for (int b : block_sizes) {
@@ -209,11 +209,11 @@ int main() {
                 k.grid = grid;
                 k.block = block;
                 std::vector<float> measurements = benchmark(k, x, y, n, iters);
-                
+
                 // Prints the command-line stats
                 Stats s = compute_stats(measurements, n);
                 print_result(k.name, n, b, s);
-                
+
                 // Creates and entry for the JSON
                 nlohmann::json entry;
                 entry["kernel"] = k.name;
@@ -222,13 +222,13 @@ int main() {
                 entry["measurements_ms"] = measurements;
                 results_json["results"].push_back(entry);
 
-            }        
-            
+            }
+
             print_block_divider();
 
         }
         print_block_divider();
-        
+
         cudaFree(x);
         cudaFree(y);
     }
