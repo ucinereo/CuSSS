@@ -63,8 +63,8 @@ target_include_directories(cuda_benchmark PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../cusss/cuda/include
 )
 
-target_link_libraries(cuda_benchmark PRIVATE 
-    "${TORCH_LIBRARIES}" 
+target_link_libraries(cuda_benchmark PRIVATE
+    "${TORCH_LIBRARIES}"
     CUDA::cudart
     nlohmann_json::nlohmann_json              # <-- NEW
 )

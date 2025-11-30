@@ -5,7 +5,7 @@ set(LIB_INSTALL_DIR "lib" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX wher
 set(BIN_INSTALL_DIR "bin" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install DLL/binaries")
 set(INCLUDE_INSTALL_DIR "include" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install headers")
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
+find_package(Python COMPONENTS Interpreter REQUIRED)
 
 include(CheckLanguage)
 check_language(CUDA)
@@ -47,14 +47,14 @@ add_library(cusss SHARED
 target_include_directories(cusss PRIVATE
     ${CMAKE_SOURCE_DIR}/cuda/include
     ${CMAKE_SOURCE_DIR}/cpp/include
-    ${Python_INCLUDE_DIRS}
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+    ${TORCH_INCLUDE_DIRS}
 )
 
 find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(cusss PRIVATE 
-    "${TORCH_LIBRARIES}" 
+target_link_libraries(cusss PRIVATE
+    "${TORCH_LIBRARIES}"
     CUDA::cudart
 )
 

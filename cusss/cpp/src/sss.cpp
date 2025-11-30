@@ -41,9 +41,9 @@ TORCH_LIBRARY(sss, m) {
         .def(torch::init<>(), "", {})
         .def("forward", &SSS_f4::forward)
         .def_pickle(
-            [](const c10::intrusive_ptr<SSS_f4> &self) 
+            [](const c10::intrusive_ptr<SSS_f4> &self)
                 -> std::vector<torch::Tensor> { return self->__getstate__(); },
-            [](const std::vector<torch::Tensor> &state) 
+            [](const std::vector<torch::Tensor> &state)
                 -> c10::intrusive_ptr<SSS_f4> {
             auto obj = c10::make_intrusive<SSS_f4>();
             obj->__setstate__(state);

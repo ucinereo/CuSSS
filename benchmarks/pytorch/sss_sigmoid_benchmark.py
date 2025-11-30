@@ -14,7 +14,6 @@ if __name__ == "__main__":
     def sss(x):
         return 0.5 * (torch.nn.functional.softsign(x) + 1)
 
-
     class SSSMegatron(MegatronModule):
         def __init__(self, config=None):
             super().__init__(config=config)
@@ -25,7 +24,15 @@ if __name__ == "__main__":
     sss_megatron = SSSMegatron()
     sss_cuda = SSS()
     sss_cuda_f4 = SSS_f4()
-    sigmoid = torch.nn.Sigmoid()  
-    relu = torch.nn.ReLU()  
+    sigmoid = torch.nn.Sigmoid()
+    relu = torch.nn.ReLU()
 
-    benchmark_on_cuda(modules={"SSS Megatron": sss_megatron, "SSS Cuda Naive": sss_cuda, "SSS Cuda float4": sss_cuda_f4, "ReLU torch": relu}, baseline=("Sigmoid torch", sigmoid))
+    benchmark_on_cuda(
+        modules={
+            "SSS Megatron": sss_megatron,
+            "SSS Cuda Naive": sss_cuda,
+            "SSS Cuda float4": sss_cuda_f4,
+            "ReLU torch": relu,
+        },
+        baseline=("Sigmoid torch", sigmoid),
+    )
