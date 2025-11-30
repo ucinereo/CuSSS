@@ -1,117 +1,72 @@
+from typing import Tuple
+
 import torch
 import torch.nn.functional as F
 
 
+
 class SSSGLU(torch.nn.Module):
-    """SSSGLU torch implementation"""
+    """
+    SSSGLU torch implementation
 
-    class SSSFunction(torch.autograd.Function):
+    SSSGLU(x, y) = SSS(x) * x * y
+                 = (x / (1.0 + x.abs()) * 0.5 + 0.5) * x * y
+    """
+
+    class SSSGLUFunction(torch.autograd.Function):
         @staticmethod
-        def forward(ctx, x: torch.Tensor) -> torch.Tensor:
+        def forward(ctx, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
             # Use the custom operation
-            ctx.save_for_backward(x)
-            return sss_forward(x)
+            ctx.save_for_backward(x, y)
+            # TODO: Implement forward
+            return sss_glu_forward(x, y)
 
         @staticmethod
         def backward(ctx, grad_output):
             # Use the custom backward operation
             x = ctx.saved_tensors[0]
+            y = ctx.saved_tensors[1]
 
-            grad_x = sss_backward(
-                x, grad_output
+            grad_x, grad_y = sss_glu_backward(
+                x, y, grad_output
             )
 
+            # TODO: Implement backward
+
             # Return gradients in the same order as forward inputs
-            return grad_x
+            return grad_x, grad_y
 
     def __init__(self):
         super().__init__()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.SSSFunction.apply(x)
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return self.SSSGLUFunction.apply(x, y)
 
-    def forward_inference(self, x: torch.Tensor) -> torch.Tensor:
-        return self.SSSFunction.apply(x)
+    def forward_inference(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return self.SSSGLUFunction.apply(x, y)
 
 
 # Custom ops for torch.script compatibility.
-@torch.library.custom_op("sss::sss_forward", mutates_args=())
-def sss_forward(x: torch.Tensor) -> torch.Tensor:
-    """Custom SSS forward operation compatible with torch.compile"""
-    return torch.ops.sss.forward_impl(x)
+@torch.library.custom_op("sss_glu::sss_glu_forward", mutates_args=())
+def sss_glu_forward(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """Custom SSSGLU forward operation compatible with torch.compile"""
+    return torch.ops.sss_glu.forward_impl(x, y)
 
 
-@sss_forward.register_fake
-def _(x: torch.Tensor) -> torch.Tensor:
+@sss_glu_forward.register_fake
+def _(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return torch.empty_like(x)
 
 
-@torch.library.custom_op("sss::sss_backward", mutates_args=())
-def sss_backward(x: torch.Tensor, grad_output: torch.Tensor) -> torch.Tensor:
-    """Custom SSS backward operation compatible with torch.compile"""
-    gradients = torch.ops.sss.backward_impl(x, grad_output)
-    return gradients[0]
+@torch.library.custom_op("sss_glu::sss_glu_backward", mutates_args=())
+def sss_glu_backward(x: torch.Tensor, y: torch.Tensor, grad_output: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Custom SSSGLU backward operation compatible with torch.compile"""
+    gradients = torch.ops.sss_glu.backward_impl(x, y, grad_output)
+    return gradients[0], gradients[1]
 
 
-@sss_backward.register_fake
-def _(x: torch.Tensor, grad_output: torch.Tensor) -> torch.Tensor:
+@sss_glu_backward.register_fake
+def _(x: torch.Tensor, y: torch.Tensor, grad_output: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     grad_x = torch.empty_like(x)
-    return grad_x
-
-
-# Same definition for float4
-
-class SSS_f4(torch.nn.Module):
-    """SSS torch implementation"""
-
-    class SSSFunction_f4(torch.autograd.Function):
-        @staticmethod
-        def forward(ctx, x: torch.Tensor) -> torch.Tensor:
-            # Use the custom operation
-            ctx.save_for_backward(x)
-            return sss_forward_f4(x)
-
-        @staticmethod
-        def backward(ctx, grad_output):
-            # Use the custom backward operation
-            x = ctx.saved_tensors[0]
-
-            grad_x = sss_backward_f4(
-                x, grad_output
-            )
-
-            # Return gradients in the same order as forward inputs
-            return grad_x
-
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.SSSFunction_f4.apply(x)
-
-    def forward_inference(self, x: torch.Tensor) -> torch.Tensor:
-        return self.SSSFunction_f4.apply(x)
-
-# Custom ops for torch.script compatibility.
-@torch.library.custom_op("sss_f4::sss_forward", mutates_args=())
-def sss_forward_f4(x: torch.Tensor) -> torch.Tensor:
-    """Custom SSS forward operation compatible with torch.compile"""
-    return torch.ops.sss.forward_impl_f4(x)
-
-
-@sss_forward_f4.register_fake
-def _(x: torch.Tensor) -> torch.Tensor:
-    return torch.empty_like(x)
-
-
-@torch.library.custom_op("sss_f4::sss_backward", mutates_args=())
-def sss_backward_f4(x: torch.Tensor, grad_output: torch.Tensor) -> torch.Tensor:
-    """Custom SSS backward operation compatible with torch.compile"""
-    gradients = torch.ops.sss.backward_impl_f4(x, grad_output)
-    return gradients[0]
-
-
-@sss_backward_f4.register_fake
-def _(x: torch.Tensor, grad_output: torch.Tensor) -> torch.Tensor:
-    grad_x = torch.empty_like(x)
-    return grad_x
+    grad_y = torch.empty_like(y)
+    return grad_x, grad_y
