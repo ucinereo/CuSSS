@@ -41,7 +41,11 @@ add_library(cusss SHARED
     "cuda/include/sss_impl.hpp"
     "cuda/src/sss_impl.cu"
 
-    # @TODO: Add other SSS variants here
+    # SSS GLU Kernel
+    "cpp/include/sss_glu.hpp"
+    "cpp/src/sss_glu.cpp"
+    "cuda/include/sss_glu_impl.hpp"
+    "cuda/src/sss_glu_impl.cu"
 )
 
 target_include_directories(cusss PRIVATE

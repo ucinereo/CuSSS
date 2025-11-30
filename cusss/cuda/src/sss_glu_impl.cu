@@ -31,7 +31,7 @@ __global__ void sss_glu_backward_kernel(const float* x, const float* y, const fl
         float g = y[idx];
         float inv = __frcp_rn(1.0f + fabsf(e));
         float l = e * inv;
-        grad_x[idx] = 0.5f * g *(l * inv + inv + 1.0f) * grad_out[idx];
+        grad_x[idx] = 0.5f * g * (l * inv + l + 1.0f) * grad_out[idx];
         grad_y[idx] = (l * 0.5f + 0.5f) * e * grad_out[idx];
     }
 }

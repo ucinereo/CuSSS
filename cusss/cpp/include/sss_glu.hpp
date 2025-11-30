@@ -21,3 +21,5 @@ public:
 
   void __setstate__(const std::vector<Tensor> &state) { return; }
 };
+
+#endif
