@@ -1,6 +1,6 @@
 import torch
 from cusss.ops.sss_wrappers import SSS, SSS_f4
-from generic_benchmark import benchmark_on_cuda
+from generic_benchmark import benchmark_on_cuda, FuncType
 
 from megatron.core.jit import jit_fuser
 from megatron.core.transformer.module import MegatronModule
@@ -29,10 +29,10 @@ if __name__ == "__main__":
 
     benchmark_on_cuda(
         modules={
-            "SSS Megatron": sss_megatron,
-            "SSS Cuda Naive": sss_cuda,
-            "SSS Cuda float4": sss_cuda_f4,
-            "ReLU torch": relu,
+            "SSS Megatron": (sss_megatron, FuncType.DEFAULT),
+            "SSS Cuda Naive": (sss_cuda, FuncType.DEFAULT),
+            "SSS Cuda float4": (sss_cuda_f4, FuncType.DEFAULT),
+            "ReLU torch": (relu, FuncType.DEFAULT),
         },
-        baseline=("Sigmoid torch", sigmoid),
+        baseline=("Sigmoid torch", (sigmoid, FuncType.DEFAULT)),
     )

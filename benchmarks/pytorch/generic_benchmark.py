@@ -1,6 +1,11 @@
 import torch
 import numpy as np
+from enum import Enum
+from typing import Type
 
+class FuncType(Enum):
+    DEFAULT = 0
+    GLU = 1
 
 def summarize_timings(t):
     t = np.array(t, dtype=float)
@@ -70,8 +75,8 @@ def compare_and_print_results(results, baseline_key, func_type):
 
 
 def benchmark_on_cuda(
-    modules: dict[str, torch.nn.Module],
-    baseline: tuple[str, torch.nn.Module],
+    modules: dict[str, tuple[torch.nn.Module, FuncType]],
+    baseline: tuple[str, tuple[torch.nn.Module, FuncType]],
     tensor_sizes: list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
 ):
     """
@@ -103,12 +108,21 @@ def benchmark_on_cuda(
         all_backward_results = {}
 
         for module_name in modules:
-            activ_fn = modules[module_name].to(device)
+            activ_fn, func_type = modules[module_name]
+            activ_fn = activ_fn.to(device)
+
+            x_y = None
+            if func_type == FuncType.GLU:
+                x_y = torch.randn(batch_size, size, device=device, requires_grad=True)
 
             # Forward pass:
             # Warm-up
-            for _ in range(WARMUP_PASSES):
-                y = activ_fn(x)
+            if func_type == FuncType.DEFAULT:
+                for _ in range(WARMUP_PASSES):
+                    y = activ_fn(x)
+            elif func_type == FuncType.GLU:
+                for _ in range(WARMUP_PASSES):
+                    y = activ_fn(x, x_y)
 
             forward_passes_times = []
 
@@ -118,11 +132,18 @@ def benchmark_on_cuda(
                 torch.cuda.synchronize()
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
-                start.record()
-                for _ in range(PASSES_PER_MEASUREMENT):
-                    y = activ_fn(x)
-                end.record()
-                torch.cuda.synchronize()
+                if func_type == FuncType.DEFAULT:
+                    start.record()
+                    for _ in range(PASSES_PER_MEASUREMENT):
+                        y = activ_fn(x)
+                    end.record()
+                    torch.cuda.synchronize()
+                elif func_type == FuncType.GLU:
+                    start.record()
+                    for _ in range(PASSES_PER_MEASUREMENT):
+                        y = activ_fn(x, x_y)
+                    end.record()
+                    torch.cuda.synchronize()
                 forward_passes_times.append(start.elapsed_time(end))
 
             all_forward_results[module_name] = forward_passes_times
