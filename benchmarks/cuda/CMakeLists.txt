@@ -49,7 +49,8 @@ add_executable(cuda_benchmark
     "src/kernels/baseline_kernels/baseline_kernels.hpp"
 
     # Add the source containing main()
-    "src/kernel_benchmark.cu"
+    # "src/kernel_benchmark.cu"
+    "src/precision_benchmark.cu"
 )
 
 target_include_directories(cuda_benchmark PRIVATE

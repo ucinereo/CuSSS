@@ -22,13 +22,11 @@ struct KernelWrapper {
 };
 
 // ------------------------------------------------------------
-// Launch helper (kernel function pointer cannot be invoked directly)
-// We wrap the <<<grid,block>>> inside a templated ‘launcher’.
+// Launch helper for template kernels
 // ------------------------------------------------------------
-template <void (*kernel)(const float*, float*, int)>
-void launch_kernel(dim3 grid, dim3 block,
-                   const float* x, float* y, int n) {
-    kernel<<<grid, block>>>(x, y, n);
+template<typename T>
+__host__ void launch_sss_forward(const T* x, T* y, int n, dim3 grid, dim3 block) {
+    sss_forward_kernel<T><<<grid, block>>>(x, y, n);
 }
 
 // ------------------------------------------------------------
@@ -105,7 +103,7 @@ int main() {
     kernels.push_back({
         "SSS",
         [grid, block] (const float* x, float* y, int m) {
-            sss_forward_kernel<<<grid, block>>>(x, y, m);
+            launch_sss_forward<float>(x, y, m, grid, block);
         },
         grid, block
     });

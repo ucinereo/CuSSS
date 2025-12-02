@@ -59,7 +59,7 @@ class CMakeBuild(build_ext):
 
         print("Start CMake build process...")
         subprocess.run(
-            ["cmake", "--build", build_dir, "--target", "install", "-j", "8"],
+            ["cmake", "--build", build_dir, "--target", "install", "--parallel", "-j", "8"],
             check=True,
         )
 

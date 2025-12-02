@@ -49,6 +49,6 @@ TORCH_LIBRARY(sss, m) {
             obj->__setstate__(state);
             return obj;
             });
-    m.def("forward_impl_f4", &forward_cuda_f4);
-    m.def("backward_impl_f4", &backward_cuda_f4);
+    m.def("forward_impl_f4", &forward_cuda_vec);
+    m.def("backward_impl_f4", &backward_cuda_vec);
 }

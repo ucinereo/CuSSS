@@ -2,7 +2,11 @@
 #include <vector>
 #include <functional>
 #include <iomanip>
-#include "../cusss/utils/template_utils.hpp"
+#include "../../../cusss/utils/template_utils.hpp"
+#include "kernels/all_kernels_import.hpp"
+#include <torch/script.h>
+#include <cuda_bf16.h>
+
 
 #define CUDA_CHECK(err) \
     if (err != cudaSuccess) { \
@@ -46,8 +50,8 @@ struct KernelWrapper {
 // ------------------------------------------------------------
 // Benchmark function
 // ------------------------------------------------------------
-float benchmark(const KernelWrapper& k,
-                const float* x, float* y, int n, int iters)
+template <typename scalar_t>
+float benchmark(const KernelWrapper<scalar_t>& k, const scalar_t* x, scalar_t* y, int n, int iters)
 {
     // Warmup
     for (int i = 0; i < 10; i++) {
@@ -75,12 +79,35 @@ float benchmark(const KernelWrapper& k,
     return ms / iters;
 }
 
+template <typename scalar_t>
+void value_comparison(const KernelWrapper<scalar_t>& k1, const KernelWrapper<scalar_t>& k2,
+                      const scalar_t* x, scalar_t* y1, scalar_t* y2, int n)
+{
+    k1.func(x, y1, n);
+    k2.func(x, y2, n);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    std::vector<scalar_t> h_y1(n);
+    std::vector<scalar_t> h_y2(n);
+    CUDA_CHECK(cudaMemcpy(h_y1.data(), y1, n * sizeof(scalar_t), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_y2.data(), y2, n * sizeof(scalar_t), cudaMemcpyDeviceToHost));
+
+    for (int i = 0; i < n; i++) {
+        if (h_y1[i] != h_y2[i]) {
+            std::cerr << "Mismatch at index " << i << ": "
+                      << static_cast<float>(h_y1[i]) << " vs "
+                      << static_cast<float>(h_y2[i]) << std::endl;
+            return;
+        }
+    }
+    std::cout << "Outputs match!" << std::endl;
+}
 // ------------------------------------------------------------
 // MAIN
 // ------------------------------------------------------------
 
 
-using scalar_t = cu10::Bfloat16;
+using scalar_t = c10::BFloat16;
 int main() {
 
     int n = 1 << 20;  // 1M
@@ -96,7 +123,7 @@ int main() {
     const int iters = 500;
 
     // Register kernels in a vector
-    std::vector<KernelWrapper> kernels;
+    std::vector<KernelWrapper<scalar_t>> kernels;
 
     kernels.push_back({
         "Identity",
@@ -109,17 +136,15 @@ int main() {
     kernels.push_back({
         "SSS_bf16",
         [grid, block] (const scalar_t* x, scalar_t* y, int m) {
-            sss_elementwise_op<<<grid, block>>>(x, y, m);
+            sss_forward_kernel<scalar_t><<<grid, block>>>(x, y, m);
         },
         grid, block
     });
 
     kernels.push_back({
-        "SSS_bf16_with_conversion",
-        [block] (const scalar_t* x, scalar_t* y, int m) {
-            int num4 = m / 4;
-            int numBlocks = (num4 + block.x - 1) / block.x;
-            sss_elementwise_bf16_with_conv<<<numBlocks, block>>>(x, y, m);
+        "SSS_bwd_bf16",
+        [grid, block] (const scalar_t* x, scalar_t* y, int m) {
+            sss_backward_kernel<scalar_t><<<grid, block>>>(x, x, y, m);
         },
         grid, block
     });
@@ -132,6 +157,9 @@ int main() {
             << " µs\n"
             << std::left;
     }
+
+    value_comparison(kernels[1], kernels[2], x, y, y, n);
+    value_comparison(kernels[3], kernels[4], x, y, y, n);
 
     cudaFree(x);
     cudaFree(y);
