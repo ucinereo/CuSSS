@@ -127,7 +127,7 @@ def benchmark_on_cuda(
 
             all_forward_results[module_name] = forward_passes_times
 
-            # Backward pass:
+            # # Backward pass:
             loss = y.sum()
 
             # Warm-up
@@ -161,5 +161,6 @@ def benchmark_on_cuda(
             baseline_key=baseline_name,
             func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes",
         )
+        # compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
 
     return

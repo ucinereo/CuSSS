@@ -5,7 +5,7 @@ set(LIB_INSTALL_DIR "lib" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX wher
 set(BIN_INSTALL_DIR "bin" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install DLL/binaries")
 set(INCLUDE_INSTALL_DIR "include" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install headers")
 
-find_package(Python COMPONENTS Interpreter REQUIRED)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
 include(CheckLanguage)
 check_language(CUDA)
@@ -36,17 +36,16 @@ find_package(Torch 2.0 REQUIRED)
 
 add_library(cusss SHARED
     # SSS Kernel
-    "cpp/include/sss.hpp"
-    "cpp/src/sss.cpp"
-    "cuda/include/sss_impl.hpp"
-    "cuda/src/sss_impl.cu"
+    "ops/sss.cpp"
+    "cuda/sss_cuda.cu"
 
     # @TODO: Add other SSS variants here
 )
 
 target_include_directories(cusss PRIVATE
-    ${CMAKE_SOURCE_DIR}/cuda/include
-    ${CMAKE_SOURCE_DIR}/cpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/cuda
+    ${CMAKE_CURRENT_SOURCE_DIR}/ops
+    ${Python_INCLUDE_DIRS}
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     ${TORCH_INCLUDE_DIRS}
 )
