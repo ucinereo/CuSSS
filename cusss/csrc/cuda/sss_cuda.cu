@@ -88,6 +88,8 @@ __global__ void sss_backward_kernel(const float* x, const float* grad_out, float
     } 
 }
 
+// ===================================================================
+// Kernel Launchers
 
 at::Tensor sss_forward_cuda(const at::Tensor& x) {
     TORCH_CHECK(x.dtype() == torch::kFloat, "Input tensor must be float!");

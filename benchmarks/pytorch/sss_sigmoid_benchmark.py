@@ -23,7 +23,6 @@ if __name__ == "__main__":
 
     sss_megatron = SSSMegatron()
     sss_cuda = SSS()
-    # sss_cuda_f4 = SSS_f4()
     sigmoid = torch.nn.Sigmoid()  
     relu = torch.nn.ReLU()  
     iden = torch.nn.Identity()

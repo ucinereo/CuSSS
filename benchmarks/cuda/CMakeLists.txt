@@ -34,6 +34,8 @@ message(STATUS "TORCH_CMAKE_PATH_OUTPUT: ${TORCH_CMAKE_PATH_OUTPUT}")
 find_package(Torch 2.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
+add_subdirectory(../../cusss/csrc cusss_csrc_build_dir)
+
 # ------------------------------------------------------------
 # Add nlohmann::json via FetchContent   <-- NEW
 # ------------------------------------------------------------
