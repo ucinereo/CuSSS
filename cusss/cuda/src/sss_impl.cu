@@ -215,12 +215,14 @@ std::vector<torch::Tensor> backward_cuda(torch::Tensor &x, torch::Tensor &grad_o
     int blockSize = 256;
     int numBlocks = (size + blockSize - 1) / blockSize;
 
-    sss_backward_kernel<float><<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(),
-        grad_outputs_contig.data_ptr<float>(),
-        grad_x.data_ptr<float>(),
-        size
-    );
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
+        sss_backward_kernel<scalar_t><<<numBlocks, blockSize>>>(
+            x.data_ptr<scalar_t>(),
+            grad_outputs_contig.data_ptr<scalar_t>(),
+            grad_x.data_ptr<scalar_t>(),
+            size
+        );
+      });
 
     return {grad_x};
 }
@@ -236,21 +238,33 @@ torch::Tensor forward_cuda_vec(torch::Tensor &x) {
     
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int vec_size = vec_size(x.dtype().toScalarType());
+    int vec_size = get_vector_size(x.scalar_type());
     int num_vec = size/vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
-    sss_forward_kernel_vec<float><<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(), output.data_ptr<float>(), size
-    );
-
+    // sss_forward_kernel_vec<float><<<numBlocks, blockSize>>>(
+    //     x.data_ptr<float>(), output.data_ptr<float>(), size
+    // );
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_forward_cuda", [&] {
+        sss_forward_kernel_vec<scalar_t><<<numBlocks, blockSize>>>(
+            x.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            size);
+      });
     int tail = size % vec_size; // remaining elements
     if (tail > 0) {
         int tailBlockSize = 32;  // small, enough for 1–3 elements
         int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
 
-        sss_forward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
-            x.data_ptr<float>(), output.data_ptr<float>(), num_vec * vec_size, size
-        );
+        // sss_forward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
+        //     x.data_ptr<float>(), output.data_ptr<float>(), num_vec * vec_size, size
+        // );
+        AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_forward_tail_cuda", [&] {
+            sss_forward_tail_kernel<scalar_t><<<tailNumBlocks, tailBlockSize>>>(
+                x.data_ptr<scalar_t>(),
+                output.data_ptr<scalar_t>(),
+                num_vec * vec_size,
+                size);
+          });
     }
 
     return output;
@@ -272,29 +286,33 @@ std::vector<torch::Tensor> backward_cuda_vec(torch::Tensor &x, torch::Tensor &gr
 
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    int vec_size = get_vector_size(x.scalar_type());
+    int num_vec = size/vec_size;
+    int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    sss_backward_kernel_vec<float><<<numBlocks, blockSize>>>(
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
+        sss_backward_kernel_vec<scalar_t><<<numBlocks, blockSize>>>(
+            x.data_ptr<scalar_t>(),
+            grad_outputs.data_ptr<scalar_t>(),
+            grad_x.data_ptr<scalar_t>(),
+            size
+        );
+      });
 
-        x.data_ptr<float>(),
-        grad_outputs.data_ptr<float>(),
-        grad_x.data_ptr<float>(),
-        size
-    );
-
-    int tail = size % 4; // remaining elements
+    int tail = size % vec_size; // remaining elements
     if (tail > 0) {
         int tailBlockSize = 32;  // small, enough for 1–3 elements
         int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
 
-        sss_backward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
-            x.data_ptr<float>(), 
-            grad_outputs.data_ptr<float>(),
-            grad_x.data_ptr<float>(), 
-            num4 * 4, 
-            size
-        );
+        AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_backward_tail_cuda", [&] {
+            sss_backward_tail_kernel<scalar_t><<<tailNumBlocks, tailBlockSize>>>(
+                x.data_ptr<scalar_t>(),
+                grad_outputs.data_ptr<scalar_t>(),
+                grad_x.data_ptr<scalar_t>(),
+                num_vec * vec_size,
+                size
+            );
+          });
     }
 
     return {grad_x};

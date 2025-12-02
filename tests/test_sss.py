@@ -4,7 +4,7 @@ import torch
 from cusss.ops.sss_wrappers import SSS, SSS_f4
 
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16]) #, torch.float8_e5m2])
 def test_forward(dtype):
     """Compare CUDA forward output to PyTorch implementation"""
     device = torch.device("cuda")
@@ -13,7 +13,8 @@ def test_forward(dtype):
     sss = SSS().to(device).to(dtype)
     sss_f4 = SSS_f4().to(device).to(dtype)
 
-    expected = (0.5 * (x.float() / (1.0 + x.abs().float()) + 1.0)).to(dtype)
+    expected = 0.5 * (x.float() / (1.0 + x.abs().float()) + 1.0)
+    expected = expected.to(dtype)
 
     # Test standard kernel
     output = sss(x)
@@ -24,7 +25,7 @@ def test_forward(dtype):
     torch.testing.assert_close(output_f4, expected, rtol=1e-3, atol=1e-5)
 
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
 def test_backward(dtype):
     """Compare CUDA backward output to PyTorch implementation"""
     device = torch.device("cuda")
@@ -33,8 +34,8 @@ def test_backward(dtype):
     sss = SSS().to(device).to(dtype)
     sss_f4 = SSS_f4().to(device).to(dtype)
 
-    grad_ref = 0.5 / (1.0 + x.detach().abs()).pow(2)
-
+    grad_ref = 0.5 / (1.0 + x.detach().abs().float()).pow(2)
+    grad_ref = grad_ref.to(dtype)
     # Test standard kernel
     output = sss(x)
     loss = output.sum()

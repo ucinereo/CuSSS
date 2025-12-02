@@ -104,7 +104,22 @@ template <> struct sss_elementwise_op<__nv_bfloat16> {
   }
 };
 
+template <> struct sss_elementwise_op<__half> {
+  __device__ static __half forward(__half x) {
+    float x_f = __half2float(x);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float result = (x_f * inv) * 0.5f + 0.5f;
+    return __float2half(result);
+  }
 
+  __device__ static __half backward(__half x, __half grad_output) {
+    float x_f = __half2float(x);
+    float grad_output_f = __half2float(grad_output);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float grad_input = grad_output_f * 0.5f * inv * inv;
+    return __float2half(grad_input);
+  }
+};
 // ===================================================================
 // VectorIO Traits structs for double, float, half, bfloat16
 template <typename scalar_t> struct VectorIO;
@@ -199,12 +214,16 @@ template <> struct VectorIO<c10::BFloat16> {
   }
 };
 
-int vec_size(c10::ScalarType dtype) {
-  if (dtype == c10::kFloat32 || dtype == c10::kFloat64) {
-    return 4;
-  } else if (dtype == c10::kHalf || dtype == c10::kBFloat16) {
-    return 2;
-  } else {
-    throw std::runtime_error("Unsupported data type for vectorized operations.");
-  }
+inline int get_vector_size(torch::Dtype dtype) {
+    switch (dtype) {
+        case torch::kFloat:
+        case torch::kDouble:
+            return 4;
+        case torch::kHalf:
+        case torch::kBFloat16:
+            return 2;
+        default:
+            TORCH_CHECK(false, "Unsupported dtype for vectorization");
+            return 1;
+    }
 }
