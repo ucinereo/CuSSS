@@ -236,19 +236,20 @@ torch::Tensor forward_cuda_vec(torch::Tensor &x) {
     
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    int vec_size = vec_size(x.dtype().toScalarType());
+    int num_vec = size/vec_size;
+    int numBlocks = (num_vec + blockSize - 1) / blockSize;
     sss_forward_kernel_vec<float><<<numBlocks, blockSize>>>(
         x.data_ptr<float>(), output.data_ptr<float>(), size
     );
 
-    int tail = size % 4; // remaining elements
+    int tail = size % vec_size; // remaining elements
     if (tail > 0) {
         int tailBlockSize = 32;  // small, enough for 1–3 elements
         int tailNumBlocks = (tail + tailBlockSize - 1) / tailBlockSize;
 
         sss_forward_tail_kernel<<<tailNumBlocks, tailBlockSize>>>(
-            x.data_ptr<float>(), output.data_ptr<float>(), num4 * 4, size
+            x.data_ptr<float>(), output.data_ptr<float>(), num_vec * vec_size, size
         );
     }
 

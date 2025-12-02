@@ -198,3 +198,13 @@ template <> struct VectorIO<c10::BFloat16> {
     return v;
   }
 };
+
+int vec_size(c10::ScalarType dtype) {
+  if (dtype == c10::kFloat32 || dtype == c10::kFloat64) {
+    return 4;
+  } else if (dtype == c10::kHalf || dtype == c10::kBFloat16) {
+    return 2;
+  } else {
+    throw std::runtime_error("Unsupported data type for vectorized operations.");
+  }
+}
