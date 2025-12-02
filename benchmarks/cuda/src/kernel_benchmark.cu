@@ -92,6 +92,7 @@ struct KernelWrapper {
     std::function<void (const float*, float*, int, dim3, dim3)> func;
     dim3 grid;
     dim3 block;
+    int num_floats_per_kernel;
 };
 
 // ------------------------------------------------------------
@@ -167,7 +168,7 @@ int main() {
         [] (const float* x, float* y, int m, dim3 grid, dim3 block) {
             sigmoid_forward_kernel<<<grid, block>>>(x, y, m);
         },
-        grid, block
+        grid, block, 1
     });
 
     kernels.push_back({
@@ -175,7 +176,7 @@ int main() {
         [] (const float* x, float* y, int m, dim3 grid, dim3 block) {
             identity_kernel<<<grid, block>>>(x, y, m);
         },
-        grid, block
+        grid, block, 1
     });
 
     kernels.push_back({
@@ -183,7 +184,7 @@ int main() {
         [] (const float* x, float* y, int m, dim3 grid, dim3 block) {
             sss_forward_kernel<<<grid, block>>>(x, y, m);
         },
-        grid, block
+        grid, block, 4
     });
 
     nlohmann::json results_json;
@@ -200,12 +201,13 @@ int main() {
 
         print_header();
 
-        for (int b : block_sizes) {
-
-            dim3 block(b);
-            dim3 grid((n + b - 1) / b);
-
+        for (int b : block_sizes) {           
+            dim3 block(b); 
+            
             for (auto& k : kernels) {
+
+                dim3 grid((n / k.num_floats_per_kernel + b - 1) / b);
+
                 k.grid = grid;
                 k.block = block;
                 std::vector<float> measurements = benchmark(k, x, y, n, iters);

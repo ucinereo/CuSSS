@@ -1,7 +1,7 @@
 import torch
 import torch.cuda.nvtx as nvtx
 
-from cusss.ops.sss_wrappers import SSS
+from cusss import SSS
 
 # 1. SETUP
 device = torch.device("cuda")
