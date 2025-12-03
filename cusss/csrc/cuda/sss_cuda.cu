@@ -23,7 +23,6 @@ __global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size
     using native_t = typename Traits::native_t;
     constexpr int vec_size = Traits::packed_size;
 
-    // index in units of float4
     int i_vec = tid;
     int base = i_vec * vec_size;
 
@@ -31,27 +30,9 @@ __global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size
         // vectorized load
         vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
 
-        // Explicit scalar lanes
-        native_t e0 = v.x;
-        native_t e1 = v.y;
-        native_t o0 = sss_elementwise_op<native_t>::forward(e0);
-        native_t o1 = sss_elementwise_op<native_t>::forward(e1);
-        native_t e2, e3, o2, o3;
-        if constexpr (vec_size >= 3) {
-            e2 = v.z;
-            e3 = v.w;
-            o2 = sss_elementwise_op<native_t>::forward(e2);
-            o3 = sss_elementwise_op<native_t>::forward(e3);
-        }
+        // apply operation
+        vec_t out = Traits::template apply<sss_elementwise_op<native_t>>(v);
 
-        // pack results
-        vec_t out;
-        out.x = o0;
-        out.y = o1;
-        if constexpr (vec_size >= 3) {
-            out.z = o2;
-            out.w = o3;
-        }
         // vectorized store
         reinterpret_cast<vec_t*>(output)[i_vec] = out;
     }
@@ -65,7 +46,7 @@ __global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out,
     using vec_t = typename Traits::vec_t;
     using native_t = typename Traits::native_t;
     constexpr int vec_size = Traits::packed_size;
-    // index in units of vec_t
+
     int i_vec = tid;
     int base = i_vec * vec_size;
 
@@ -74,31 +55,12 @@ __global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out,
         vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
         vec_t g = reinterpret_cast<const vec_t*>(grad_out)[i_vec];
 
-        // Explicit scalar lanes
-        native_t e0 = v.x;
-        native_t e1 = v.y;
-        native_t o0 = sss_elementwise_op<native_t>::backward(e0, g.x);
-        native_t o1 = sss_elementwise_op<native_t>::backward(e1, g.y);
-        native_t e2, e3, o2, o3;
-        if constexpr (vec_size >= 3) {
-            e2 = v.z;
-            e3 = v.w;
-            o2 = sss_elementwise_op<native_t>::backward(e2, g.z);
-            o3 = sss_elementwise_op<native_t>::backward(e3, g.w);
-        }
-
-        // pack results
-        vec_t out;
-        out.x = o0;
-        out.y = o1;
-        if constexpr (vec_size >= 3) {
-            out.z = o2;
-            out.w = o3;
-        }
+        // apply backward operation
+        vec_t out = Traits::template apply_backward<sss_elementwise_op<native_t>>(v, g);
 
         // vectorized store
         reinterpret_cast<vec_t*>(grad_x)[i_vec] = out;
-    } 
+    }
 }
 
 

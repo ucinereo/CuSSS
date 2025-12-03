@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.3)
 project(cusss LANGUAGES CXX)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(LIB_INSTALL_DIR "lib" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install libraries")
 set(BIN_INSTALL_DIR "bin" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install DLL/binaries")
 
@@ -58,6 +62,7 @@ add_executable(cuda_benchmark
 
     # Add the source containing main()
     "src/kernel_benchmark.cu"
+    # "src/precision_benchmark.cu"
 )
 
 target_include_directories(cuda_benchmark PRIVATE

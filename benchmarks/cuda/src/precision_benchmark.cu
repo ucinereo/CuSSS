@@ -2,7 +2,7 @@
 #include <vector>
 #include <functional>
 #include <iomanip>
-#include "../../../cusss/utils/template_utils.hpp"
+#include "../../cusss/csrc/utils/template_utils.hpp"
 #include "kernels/all_kernels_import.hpp"
 #include <torch/script.h>
 #include <cuda_bf16.h>
@@ -107,59 +107,72 @@ void value_comparison(const KernelWrapper<scalar_t>& k1, const KernelWrapper<sca
 // ------------------------------------------------------------
 
 
-using scalar_t = c10::BFloat16;
 int main() {
 
     int n = 1 << 20;  // 1M
-    int bytes = n * sizeof(scalar_t);
+    int bytes = n * sizeof(float);
 
-    scalar_t *x, *y;
+    float *x, *y;
     CUDA_CHECK(cudaMalloc(&x, bytes));
     CUDA_CHECK(cudaMalloc(&y, bytes));
-
+    
     dim3 block(256);
     dim3 grid((n + block.x - 1) / block.x);
 
-    const int iters = 500;
+    const int iters = 10000;
 
-    // Register kernels in a vector
-    std::vector<KernelWrapper<scalar_t>> kernels;
-
-    kernels.push_back({
+    auto k0 = KernelWrapper<float>{
         "Identity",
-        [grid, block] (const scalar_t* x, scalar_t* y, int m) {
+        [grid, block] (const float* x, float* y, int m) {
             identity_kernel<<<grid, block>>>(x, y, m);
         },
         grid, block
-    });
+    };
 
-    kernels.push_back({
+    auto k1 = KernelWrapper<c10::BFloat16>{
         "SSS_bf16",
-        [grid, block] (const scalar_t* x, scalar_t* y, int m) {
-            sss_forward_kernel<scalar_t><<<grid, block>>>(x, y, m);
+        [grid, block] (const c10::BFloat16* x, c10::BFloat16* y, int m) {
+            sss_forward_kernel<c10::BFloat16><<<grid, block>>>(x, y, m);
         },
         grid, block
-    });
+    };
 
-    kernels.push_back({
-        "SSS_bwd_bf16",
-        [grid, block] (const scalar_t* x, scalar_t* y, int m) {
-            sss_backward_kernel<scalar_t><<<grid, block>>>(x, x, y, m);
+    auto k2 = KernelWrapper<c10::Half>{
+        "SSS_fp16",
+        [grid, block] (const c10::Half* x, c10::Half* y, int m) {
+            sss_forward_kernel<c10::Half><<<grid, block>>>(x, y, m);
         },
         grid, block
-    });
-    
-    std::cout << std::left;
-    for (auto& k : kernels) {
-        float per_ms = benchmark(k, x, y, n, iters);
-        std::cout << std::setw(10) << k.name
-            << std::right << std::setw(10) << per_ms * 1000
-            << " µs\n"
-            << std::left;
-    }
+    };
+    float per_ms;
+    per_ms = benchmark(k0, x, y, n, iters);
+    std::cout << std::left
+        << std::setw(10) << k0.name
+        << std::right << std::setw(10) << per_ms * 1000
+        << " µs\n"
+        << std::left;
+    per_ms = benchmark(k1, reinterpret_cast<const c10::BFloat16*>(x), reinterpret_cast<c10::BFloat16*>(y), n, iters);
+    std::cout << std::left
+        << std::setw(10) << k1.name
+        << std::right << std::setw(10) << per_ms * 1000
+        << " µs\n"
+        << std::left;
+    per_ms = benchmark(k2, reinterpret_cast<const c10::Half*>(x), reinterpret_cast<c10::Half*>(y), n, iters);
+    std::cout << std::left
+        << std::setw(10) << k2.name
+        << std::right << std::setw(10) << per_ms * 1000
+        << " µs\n"
+        << std::left;
+    // std::cout << std::left;
+    // for (auto& k : kernels) {
+    //     float per_ms = benchmark(k, x, y, n, iters);
+    //     std::cout << std::setw(10) << k.name
+    //         << std::right << std::setw(10) << per_ms * 1000
+    //         << " µs\n"
+    //         << std::left;
+    // }
 
-    value_comparison(kernels[1], kernels[2], x, y, y, n);
-    value_comparison(kernels[3], kernels[4], x, y, y, n);
+    // value_comparison(kernels[1], kernels[2], x, y, y, n);
 
     cudaFree(x);
     cudaFree(y);
