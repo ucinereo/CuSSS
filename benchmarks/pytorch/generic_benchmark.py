@@ -13,10 +13,12 @@ def summarize_timings(t):
         "n": len(t),
     }
 
+
 # ANSI escape sequences
 RED = "\033[91m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
+
 
 def compare_and_print_results(results, baseline_key, func_type):
     stats = {k: summarize_timings(v) for k, v in results.items()}
@@ -45,7 +47,7 @@ def compare_and_print_results(results, baseline_key, func_type):
 
         # format Δ % with colors
         pct_str = f"{d_pct:.2f}%"
-        pct_fmt = f"{pct_str:>10}"   # align first
+        pct_fmt = f"{pct_str:>10}"  # align first
 
         if d_pct < 0:
             pct_colored = f"{GREEN}{pct_fmt}{RESET}"
@@ -66,9 +68,14 @@ def compare_and_print_results(results, baseline_key, func_type):
 
     print()
 
-def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str, torch.nn.Module], tensor_sizes : list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000]):
+
+def benchmark_on_cuda(
+    modules: dict[str, torch.nn.Module],
+    baseline: tuple[str, torch.nn.Module],
+    tensor_sizes: list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
+):
     """
-    Generic benchmark function which takes some modules (here for the activation functions) and records the time 
+    Generic benchmark function which takes some modules (here for the activation functions) and records the time
     it takes to apply the forward and backward functions each 100 times. On cuda-device.
     """
     device = torch.device("cuda")
@@ -83,7 +90,6 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
     # Iterate over tensor sizes
     for size in tensor_sizes:
-
         batch_size = 64
         x = torch.randn(batch_size, size, device=device, requires_grad=True)
 
@@ -98,7 +104,7 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
         for module_name in modules:
             activ_fn = modules[module_name].to(device)
-            
+
             # Forward pass:
             # Warm-up
             for _ in range(WARMUP_PASSES):
@@ -121,7 +127,7 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
             all_forward_results[module_name] = forward_passes_times
 
-            # Backward pass:
+            # # Backward pass:
             loss = y.sum()
 
             # Warm-up
@@ -145,8 +151,16 @@ def benchmark_on_cuda(modules : dict[str, torch.nn.Module], baseline : tuple[str
 
             all_backward_results[module_name] = backward_passes_times
 
-        compare_and_print_results(all_forward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Forward passes")
-        compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
+        compare_and_print_results(
+            all_forward_results,
+            baseline_key=baseline_name,
+            func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Forward passes",
+        )
+        compare_and_print_results(
+            all_backward_results,
+            baseline_key=baseline_name,
+            func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes",
+        )
+        # compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
 
     return
-

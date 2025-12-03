@@ -1,3 +1,3 @@
-#include "../../../../cusss/cuda/include/sss_impl.hpp"
+#include "../../../../cusss/csrc/cuda/sss_cuda.cu"
 #include "baseline_kernels/baseline_kernels.hpp"
 // Add further kernel implementation files...

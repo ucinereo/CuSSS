@@ -34,6 +34,8 @@ message(STATUS "TORCH_CMAKE_PATH_OUTPUT: ${TORCH_CMAKE_PATH_OUTPUT}")
 find_package(Torch 2.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
+add_subdirectory(../../cusss/csrc cusss_csrc_build_dir)
+
 # ------------------------------------------------------------
 # Add nlohmann::json via FetchContent   <-- NEW
 # ------------------------------------------------------------
@@ -47,11 +49,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 # ------------------------------------------------------------
 
+# Change from library to executable
 add_executable(cuda_benchmark
-    "../../cusss/cpp/include/sss.hpp"
-    "../../cusss/cpp/src/sss.cpp"
-    "../../cusss/cuda/include/sss_impl.hpp"
-    "../../cusss/cuda/src/sss_impl.cu"
+    # SSS Kernel sources
     "src/kernels/all_kernels_import.hpp"
     "src/kernels/baseline_kernels/baseline_kernels.cu"
     "src/kernels/baseline_kernels/baseline_kernels.hpp"
@@ -61,11 +61,11 @@ add_executable(cuda_benchmark
 )
 
 target_include_directories(cuda_benchmark PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../cusss/cpp/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../cusss/cuda/include
+    ${CMAKE_SOURCE_DIR}/../../cusss/csrc
 )
 
 target_link_libraries(cuda_benchmark PRIVATE 
+    cusss
     "${TORCH_LIBRARIES}" 
     CUDA::cudart
     nlohmann_json::nlohmann_json              # <-- NEW
