@@ -1,0 +1,4 @@
+[
+    { "device": "GH200", "memory_bandwith_gb_s": 4023.0 },
+    { "device": "RTX2070", "memory_bandwith_gb_s": 448.0 }
+]

@@ -18,10 +18,21 @@ In benchmarks/pytorch_benchmarks:
 cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cuda_benchmark
 ./build/cuda_benchmark
 ```
+
+### Visualize CUDA results
+```bash
+python3 benchmarks/plotting/create_boxplots.py GH200
+```
+The resulting plot will be generated at benchmarks/results/boxplots_cuda.pdf <br>
+If you have executed the benchmark on another GPU:
+- Add the GPU to benchmarks/device_specs/gpus.json
+- Adjust the argument "GH200" in the CUDA benchmarking call
+
 ### Add other existing kernel implementations
 In benchmarks/cuda_benchmarks/all_kernels_import.hpp: 
 - Add an import for the header file which references the kernel (such as #include "../../cusss/cuda/include/sss_impl.hpp" for SSS)
 - Add the kernel in the kernel_benchmark.cu main() function (note that some kernels may have more parameters, such as parameter "a" in xSSS. Here is an example of how that may look like:)
+```cpp
     kernels.push_back({
         "xSSS",
         [grid, block] (const float* x, float* y, int m) { // The inputs for the wrapper function should stay the same
@@ -29,6 +40,7 @@ In benchmarks/cuda_benchmarks/all_kernels_import.hpp:
         },
         grid, block
     });
+```
 
 ### Alternatively: Add a kernel directly, without cusss implementation:
 - In benchmarks/cuda/src/kernels/baseline_kernels add your kernel in baseline_kernels.cu and baseline_kernels.hpp

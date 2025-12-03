@@ -23,7 +23,7 @@ execute_process(
 )
 
 if (NOT ${TORCH_CMAKE_PATH_RESULT} EQUAL 0)
-message(FATAL_ERROR "failed to find your pytorch installation, error: ${TORCH_CMAKE_PATH_ERROR}\n")
+    message(FATAL_ERROR "failed to find your pytorch installation, error: ${TORCH_CMAKE_PATH_ERROR}\n")
 endif()
 
 string(STRIP ${TORCH_CMAKE_PATH_OUTPUT} TORCH_CMAKE_PATH_OUTPUT)
@@ -32,14 +32,22 @@ set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${TORCH_CMAKE_PATH_OUTPUT}")
 message(STATUS "TORCH_CMAKE_PATH_OUTPUT: ${TORCH_CMAKE_PATH_OUTPUT}")
 
 find_package(Torch 2.0 REQUIRED)
-
-
-find_package(Torch 2.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
-# Change from library to executable
+# ------------------------------------------------------------
+# Add nlohmann::json via FetchContent   <-- NEW
+# ------------------------------------------------------------
+include(FetchContent)
+
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/latest/download/json.tar.xz
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+# ------------------------------------------------------------
+
 add_executable(cuda_benchmark
-    # SSS Kernel sources
     "../../cusss/cpp/include/sss.hpp"
     "../../cusss/cpp/src/sss.cpp"
     "../../cusss/cuda/include/sss_impl.hpp"
@@ -49,8 +57,7 @@ add_executable(cuda_benchmark
     "src/kernels/baseline_kernels/baseline_kernels.hpp"
 
     # Add the source containing main()
-    # "src/kernel_benchmark.cu"
-    "src/precision_benchmark.cu"
+    "src/kernel_benchmark.cu"
 )
 
 target_include_directories(cuda_benchmark PRIVATE
@@ -61,16 +68,15 @@ target_include_directories(cuda_benchmark PRIVATE
 target_link_libraries(cuda_benchmark PRIVATE 
     "${TORCH_LIBRARIES}" 
     CUDA::cudart
+    nlohmann_json::nlohmann_json              # <-- NEW
 )
 
-# Link cudadevrt if available (needed for device code)
 if(TARGET CUDA::cudadevrt)
     target_link_libraries(cuda_benchmark PRIVATE CUDA::cudadevrt)
 endif()
 
 target_compile_features(cuda_benchmark PRIVATE cxx_std_17)
 
-# Install executable
 install(TARGETS cuda_benchmark
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/${BIN_INSTALL_DIR}
 )
