@@ -144,11 +144,11 @@ __global__ void sss_backward_kernel_vec(const scalar_t* x, const scalar_t* grad_
 
         // pack results
         vec_t out;
-        out.x = g.x * o0;
-        out.y = g.y * o1;
+        out.x = o0;
+        out.y = o1;
         if constexpr (vec_size >= 3) {
-            out.z = g.z * o2;
-            out.w = g.w * o3;
+            out.z = o2;
+            out.w = o3;
         }
 
         // vectorized store

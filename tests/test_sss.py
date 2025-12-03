@@ -27,26 +27,28 @@ def test_forward(dtype):
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
 def test_backward(dtype):
-    """Compare CUDA backward output to PyTorch implementation"""
+    """Compare CUDA backward output to PyTorch implementation with non-uniform gradients"""
     device = torch.device("cuda")
     x = torch.randn(64, 512, device=device, dtype=dtype, requires_grad=True)
+    grad_output = torch.randn(64, 512, device=device, dtype=dtype)
 
     sss = SSS().to(device).to(dtype)
     sss_f4 = SSS_f4().to(device).to(dtype)
 
-    grad_ref = 0.5 / (1.0 + x.detach().abs().float()).pow(2)
+    # Expected gradient: d(SSS)/dx * grad_output
+    # where d(SSS)/dx = 0.5 / (1 + |x|)^2
+    grad_ref = (0.5 / (1.0 + x.detach().abs().float()).pow(2)) * grad_output.float()
     grad_ref = grad_ref.to(dtype)
+
     # Test standard kernel
     output = sss(x)
-    loss = output.sum()
-    loss.backward()
+    output.backward(grad_output)
     grad_cuda = x.grad.clone()
     torch.testing.assert_close(grad_cuda, grad_ref, rtol=1e-3, atol=1e-5)
 
-    # Test float4 kernel
+    # Test vectorized kernel
     x.grad = None
     output_f4 = sss_f4(x)
-    loss_f4 = output_f4.sum()
-    loss_f4.backward()
+    output_f4.backward(grad_output)
     grad_cuda_f4 = x.grad.clone()
     torch.testing.assert_close(grad_cuda_f4, grad_ref, rtol=1e-3, atol=1e-5)
