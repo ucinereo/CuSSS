@@ -48,6 +48,5 @@ def test_backward(xsss_setup):
     grad_x_ref = (inv * inv) * a.detach()
     grad_a_ref = (input.detach() * inv).sum().view_as(a)
 
-
     torch.testing.assert_close(x_grad_cuda, grad_x_ref)
     torch.testing.assert_close(a_grad_cuda, grad_a_ref)
