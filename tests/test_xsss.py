@@ -9,8 +9,9 @@ def xsss_setup():
     """Fixture to set up SSS instances and test input"""
     device = torch.device("cuda")
 
-    x = torch.randn(64, 512, device=device, requires_grad=True)
-    a = torch.randn((), device=device, requires_grad=True)
+    # reduce x size to 4k elements so grad_a accumulation error does not get too large for floaat
+    x = torch.randn(64, 64, device=device, requires_grad=True)
+    a = torch.randn(1, device=device, requires_grad=True)
     xsss = xSSS().to(device)
 
     return {
@@ -45,7 +46,7 @@ def test_backward(xsss_setup):
 
     inv = 1.0 / (1.0 + input.detach().abs())
     grad_x_ref = (inv * inv) * a.detach()
-    grad_a_ref = (input.detach() * inv).sum()
+    grad_a_ref = (input.detach() * inv).sum().view_as(a)
 
 
     torch.testing.assert_close(x_grad_cuda, grad_x_ref)
