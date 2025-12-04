@@ -3,4 +3,8 @@
 test:
 	rm -rf build/
 	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
-		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v"
+		bash -c "unset CC CXX && pip install . --no-build-isolation --no-deps && pytest tests/ -v"
+
+install:
+	rm -rf build/
+	uv sync --all-extras

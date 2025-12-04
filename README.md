@@ -27,14 +27,28 @@ HS2025
 
 ## Installation
 
+Needs CUDA toolkit to be available. (see CSCS.md for instructions on how to set up the environment on CSCS cluster)
+
 ```bash
 pip install . --no-build-isolation --no-deps
+```
+
+or using uv:
+
+```bash
+make install
 ```
 
 ## Testing
 
 ```bash
 pytest tests/ -v
+```
+
+or using makefile:
+
+```bash
+make test
 ```
 
 ## Benchmarking
