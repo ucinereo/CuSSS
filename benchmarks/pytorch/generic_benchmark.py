@@ -73,6 +73,7 @@ def benchmark_on_cuda(
     modules: dict[str, torch.nn.Module],
     baseline: tuple[str, torch.nn.Module],
     tensor_sizes: list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
+    mode: str = "SSS"
 ):
     """
     Generic benchmark function which takes some modules (here for the activation functions) and records the time
@@ -92,6 +93,7 @@ def benchmark_on_cuda(
     for size in tensor_sizes:
         batch_size = 64
         x = torch.randn(batch_size, size, device=device, requires_grad=True)
+        a = torch.randn(1, device=device, requires_grad=True) # for xSSS
 
         title = f"| Tensor size ({batch_size}, {size:_}) |"
         print("-" * len(title))
@@ -108,7 +110,10 @@ def benchmark_on_cuda(
             # Forward pass:
             # Warm-up
             for _ in range(WARMUP_PASSES):
-                y = activ_fn(x)
+                if mode == "SSS":
+                    y = activ_fn(x)
+                elif mode == "xSSS":
+                    y = activ_fn(x, a)
 
             forward_passes_times = []
 
@@ -120,7 +125,10 @@ def benchmark_on_cuda(
                 end = torch.cuda.Event(enable_timing=True)
                 start.record()
                 for _ in range(PASSES_PER_MEASUREMENT):
-                    y = activ_fn(x)
+                    if mode == "SSS":
+                        y = activ_fn(x)
+                    elif mode == "xSSS":
+                        y = activ_fn(x, a)
                 end.record()
                 torch.cuda.synchronize()
                 forward_passes_times.append(start.elapsed_time(end))
