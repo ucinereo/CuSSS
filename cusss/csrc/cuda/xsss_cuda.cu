@@ -3,8 +3,6 @@
 #include <cuda.h>
 #include <torch/script.h>
 
-#include <vector>
-
 using namespace torch::indexing;
 using namespace torch::autograd;
 
