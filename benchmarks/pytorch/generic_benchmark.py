@@ -88,8 +88,8 @@ def benchmark_on_cuda(
     """
 
 
-    parser = argparse.ArgumentParser(description="Plot PyTorch benchmark JSON: mean time vs tensor size")
-    parser.add_argument("input", type=Path, help="Path for the benchmark JSON (from generic_benchmark.py)")
+    parser = argparse.ArgumentParser(description="Benchmark with PyTorch")
+    parser.add_argument("output", type=Path, help="Path to output JSON file with results")
     args = parser.parse_args()
 
     device = torch.device("cuda")

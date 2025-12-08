@@ -65,6 +65,49 @@ def prepare_series(data: Dict[int, Any], direction: str = "forward", stat: str =
     return sizes, series
 
 
+def prepare_combined_series(
+    data: Dict[int, Any], f_mult: float = 2.0, b_mult: float = 1.0, stat: str = "mean"
+):
+    """Prepare a series that is a linear combination of forward and backward stats.
+
+    For each module and size the value is computed as: f_mult * forward[stat] + b_mult * backward[stat].
+    If either forward or backward stat is missing for a module at a size, the combined value is None
+    (so matplotlib will show a gap).
+    """
+    sizes = sorted(data.keys())
+
+    # gather module names across forward and backward
+    module_names = set()
+    for s in sizes:
+        block = data[s]
+        module_names.update(block.get("forward", {}).keys())
+        module_names.update(block.get("backward", {}).keys())
+
+    series: Dict[str, list[float | None]] = {m: [] for m in sorted(module_names)}
+    for s in sizes:
+        block = data[s]
+        f_block = block.get("forward", {})
+        b_block = block.get("backward", {})
+        for m in series:
+            f_stats = f_block.get(m)
+            b_stats = b_block.get(m)
+            if f_stats is None or b_stats is None:
+                series[m].append(None)
+            else:
+                fval = f_stats.get(stat)
+                bval = b_stats.get(stat)
+                if fval is None or bval is None:
+                    series[m].append(None)
+                else:
+                    try:
+                        combined = float(f_mult * float(fval) + b_mult * float(bval))
+                    except Exception:
+                        combined = None
+                    series[m].append(combined)
+
+    return sizes, series
+
+
 def plot_mean_vs_size(
     sizes: list[int],
     series: Dict[str, list[float | None]],
@@ -127,7 +170,7 @@ def main() -> None:
         raise SystemExit(f"No data found in {args.input}")
 
     out_forward = args.output / "forward"
-    sizes, series = prepare_series(data, direction=out_forward, stat=args.stat)
+    sizes, series = prepare_series(data, direction="forward", stat=args.stat)
     title = f"Forward mean time vs tensor size ({args.stat})"
     plot_mean_vs_size(sizes, series, out_forward, title=title, logx=not args.no_logx)
 
@@ -140,6 +183,11 @@ def main() -> None:
 
     print(f"Wrote forward plot to {out_backward} (or same name with .pdf/.svg)")
 
+    sizes, series = prepare_combined_series(data, f_mult=2.0, b_mult=1.0, stat=args.stat)
+    out_combined = args.output / "combined"
+    title = f"Combined (2x forward + 1x backward) mean time vs tensor size ({args.stat})"
+    plot_mean_vs_size(sizes, series, out_combined, title=title, logx=not args.no_logx)  
+    print(f"Wrote combined plot to {out_combined} (or same name with .pdf/.svg)")
 
 if __name__ == "__main__":
     main()
