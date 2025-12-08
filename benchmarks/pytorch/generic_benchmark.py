@@ -1,16 +1,20 @@
 import torch
 import numpy as np
+import json
+from pathlib import Path
+import argparse
 
 
 def summarize_timings(t):
     t = np.array(t, dtype=float)
+    # convert numpy scalars to native python types for JSON serialization
     return {
-        "mean": t.mean(),
-        "std": t.std(),
-        "median": np.median(t),
-        "p5": np.percentile(t, 5),
-        "p95": np.percentile(t, 95),
-        "n": len(t),
+        "mean": float(t.mean()),
+        "std": float(t.std()),
+        "median": float(np.median(t)),
+        "p5": float(np.percentile(t, 5)),
+        "p95": float(np.percentile(t, 95)),
+        "n": int(len(t)),
     }
 
 
@@ -68,6 +72,9 @@ def compare_and_print_results(results, baseline_key, func_type):
 
     print()
 
+    # Return stats so callers can use them programmatically (e.g., to save JSON)
+    return stats
+
 
 def benchmark_on_cuda(
     modules: dict[str, torch.nn.Module],
@@ -78,6 +85,12 @@ def benchmark_on_cuda(
     Generic benchmark function which takes some modules (here for the activation functions) and records the time
     it takes to apply the forward and backward functions each 100 times. On cuda-device.
     """
+
+
+    parser = argparse.ArgumentParser(description="Plot PyTorch benchmark JSON: mean time vs tensor size")
+    parser.add_argument("input", type=Path, help="Path for the benchmark JSON (from generic_benchmark.py)")
+    args = parser.parse_args()
+
     device = torch.device("cuda")
 
     WARMUP_PASSES = 100
@@ -87,6 +100,8 @@ def benchmark_on_cuda(
     baseline_name, baseline_module = baseline
     baseline_name = f"{baseline_name} [Baseline]"
     modules[baseline_name] = baseline_module
+
+    json_data = {}
 
     # Iterate over tensor sizes
     for size in tensor_sizes:
@@ -151,16 +166,32 @@ def benchmark_on_cuda(
 
             all_backward_results[module_name] = backward_passes_times
 
-        compare_and_print_results(
+        forward_stats = compare_and_print_results(
             all_forward_results,
             baseline_key=baseline_name,
             func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Forward passes",
         )
-        compare_and_print_results(
+
+        backward_stats = compare_and_print_results(
             all_backward_results,
             baseline_key=baseline_name,
             func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes",
         )
-        # compare_and_print_results(all_backward_results, baseline_key=baseline_name, func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes")
+
+        json_data[size] = {
+            "forward": forward_stats,
+            "backward": backward_stats
+        }
+
+    # If requested, save a JSON with raw timings and computed stats for this tensor size
+    if args.output is not None:
+        out_path = Path(args.output)
+
+        # write back
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=2)
+        
+        print(f"Wrote to {out_path}")
 
     return
