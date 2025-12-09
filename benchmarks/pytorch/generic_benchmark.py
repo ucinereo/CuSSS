@@ -87,11 +87,6 @@ def benchmark_on_cuda(
     it takes to apply the forward and backward functions each 100 times. On cuda-device.
     """
 
-
-    parser = argparse.ArgumentParser(description="Benchmark with PyTorch")
-    parser.add_argument("output", type=Path, help="Path to output JSON file with results")
-    args = parser.parse_args()
-
     device = torch.device("cuda")
 
     WARMUP_PASSES = 100
@@ -186,20 +181,52 @@ def benchmark_on_cuda(
             func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Backward passes",
         )
 
+        # Compute combined timings (element-wise sum of forward + backward measurements)
+        combined_timings = {}
+        # Only combine modules that have both forward and backward measurements
+        for name in set(all_forward_results.keys()) & set(all_backward_results.keys()):
+            f_times = all_forward_results[name]
+            b_times = all_backward_results[name]
+            # Align lengths (use min length) and sum element-wise
+            min_len = min(len(f_times), len(b_times))
+            if min_len <= 0:
+                continue
+            combined = [float(f_times[i]) * 2 + float(b_times[i]) for i in range(min_len)]
+            combined_timings[name] = combined
+
+        # Print combined results to terminal (use baseline if available)
+        if combined_timings:
+            if baseline_name in combined_timings:
+                baseline_for_combined = baseline_name
+            else:
+                # fallback to any available module as baseline and warn
+                baseline_for_combined = next(iter(combined_timings))
+                print(
+                    f"Warning: baseline '{baseline_name}' has no combined timings; using '{baseline_for_combined}' as baseline for combined results."
+                )
+
+            combined_stats = compare_and_print_results(
+                combined_timings,
+                baseline_key=baseline_for_combined,
+                func_type=f"{MEASUREMENTS} x {PASSES_PER_MEASUREMENT} Combined (2xF + 1xB) passes",
+            )
+        else:
+            combined_stats = {}
+
         json_data[size] = {
             "forward": forward_stats,
-            "backward": backward_stats
+            "backward": backward_stats,
+            "combined": combined_stats,
         }
 
     # If requested, save a JSON with raw timings and computed stats for this tensor size
-    if args.output is not None:
-        out_path = Path(args.output)
+    out_path = Path("benchmarks/results/pytorch.json")
 
-        # write back
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", encoding="utf-8") as f:
-            json.dump(json_data, f, indent=2)
-        
-        print(f"Wrote to {out_path}")
+    # write back
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=2)
+    
+    print(f"Wrote to {out_path}")
 
     return
