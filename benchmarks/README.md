@@ -19,11 +19,12 @@ cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cu
 ./build/cuda_benchmark
 ```
 
-### Visualize CUDA results
+### Visualize CUDA & PyTorch results
 ```bash
 python3 benchmarks/plotting/create_boxplots.py GH200
+python3 benchmarks/plotting/create_graph.py
 ```
-The resulting plot will be generated at benchmarks/results/boxplots_cuda.pdf <br>
+The resulting plot will be generated at benchmarks/results/ <br>
 If you have executed the benchmark on another GPU:
 - Add the GPU to benchmarks/device_specs/gpus.json
 - Adjust the argument "GH200" in the CUDA benchmarking call

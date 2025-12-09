@@ -146,47 +146,32 @@ def plot_mean_vs_size(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Plot PyTorch benchmark JSON: mean time vs tensor size")
-    parser.add_argument("input", type=Path, help="Path to benchmark JSON (from generic_benchmark.py)")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        default=Path("benchmarks/results/plots/pytorch_mean_vs_size"),
-        help="Output file path (pdf/svg extension optional). If no extension given, both .pdf and .svg are written.",
-    )
+    input_path = Path("benchmarks/results/pytorch.json")
+    output_path = Path("benchmarks/results/plots/graph_pytorch/")
 
-    parser.add_argument(
-        "--stat",
-        default="mean",
-        help="Which statistic to plot from the JSON (default: mean)",
-    )
-    parser.add_argument("--no-logx", action="store_true", help="Disable log scale on x axis")
-
-    args = parser.parse_args()
-
-    data = load_benchmark_json(args.input)
+    
+    data = load_benchmark_json(input_path)
     if not data:
-        raise SystemExit(f"No data found in {args.input}")
+        raise SystemExit(f"No data found in {input_path}")
 
-    out_forward = args.output / "forward"
-    sizes, series = prepare_series(data, direction="forward", stat=args.stat)
-    title = f"Forward mean time vs tensor size ({args.stat})"
-    plot_mean_vs_size(sizes, series, out_forward, title=title, logx=not args.no_logx)
+    out_forward = output_path / "forward"
+    sizes, series = prepare_series(data, direction="forward")
+    title = f"Forward mean time vs tensor size"
+    plot_mean_vs_size(sizes, series, out_forward, title=title, logx=True)
 
     print(f"Wrote forward plot to {out_forward} (or same name with .pdf/.svg)")
 
-    out_backward = args.output / "backward"
-    sizes, series = prepare_series(data, direction="backward", stat=args.stat)
-    title = f"Backward mean time vs tensor size ({args.stat})"
-    plot_mean_vs_size(sizes, series, out_backward, title=title, logx=not args.no_logx)
+    out_backward = output_path / "backward"
+    sizes, series = prepare_series(data, direction="backward")
+    title = f"Backward mean time vs tensor size"
+    plot_mean_vs_size(sizes, series, out_backward, title=title, logx=True)
 
     print(f"Wrote forward plot to {out_backward} (or same name with .pdf/.svg)")
 
-    sizes, series = prepare_combined_series(data, f_mult=2.0, b_mult=1.0, stat=args.stat)
-    out_combined = args.output / "combined"
-    title = f"Combined (2x forward + 1x backward) mean time vs tensor size ({args.stat})"
-    plot_mean_vs_size(sizes, series, out_combined, title=title, logx=not args.no_logx)  
+    sizes, series = prepare_series(data, direction="combined")
+    out_combined = output_path / "combined"
+    title = f"Combined (2x forward + 1x backward) mean time vs tensor size"
+    plot_mean_vs_size(sizes, series, out_combined, title=title, logx=True)  
     print(f"Wrote combined plot to {out_combined} (or same name with .pdf/.svg)")
 
 if __name__ == "__main__":

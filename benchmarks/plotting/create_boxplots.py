@@ -44,7 +44,7 @@ def boxplots_cuda(device_name):
     # structure: tensor_size -> block_size -> kernel -> list of meas
     # --------------------------------------------------------------
 
-    output_path = os.path.join(base, "../results/boxplots_cuda.pdf")
+    output_path = os.path.join(base, "../results/boxplots_cuda/boxplots_cuda.pdf")
     with PdfPages(output_path) as pdf:
         tensor_groups = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
@@ -152,7 +152,7 @@ def boxplots_cuda(device_name):
                 plt.tight_layout(rect=(0, 0, 1, 0.96))
                 svg_path = os.path.join(
                     base,
-                    f"../results/svgs_cuda/boxplots_cuda_{size_str.replace('.', '_')}.svg",
+                    f"../results/plots/boxplots_cuda/boxplot_{size_str.replace('.', '_')}.svg",
                 )
                 fig.savefig(svg_path)
                 pdf.savefig(fig)
