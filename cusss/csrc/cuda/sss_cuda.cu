@@ -84,8 +84,8 @@ at::Tensor sss_forward_cuda(const at::Tensor& x_in) {
     int num_vec = size / vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    AT_DISPATCH_FLOATING_TYPES_AND2(
-        at::kHalf, at::kBFloat16, x.scalar_type(), "sss_forward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND(
+        at::kBFloat16, x.scalar_type(), "sss_forward_cuda", [&] {
         sss_forward_kernel<scalar_t><<<numBlocks, blockSize>>>(
             x.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
@@ -113,7 +113,7 @@ at::Tensor sss_backward_cuda(const at::Tensor& x_in, const at::Tensor& grad_outp
     int num_vec = size/vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND(at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
         sss_backward_kernel<scalar_t><<<numBlocks, blockSize>>>(
             x.data_ptr<scalar_t>(),
             grad_output_contig.data_ptr<scalar_t>(),
