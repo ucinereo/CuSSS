@@ -33,4 +33,4 @@ if __name__ == "__main__":
     
     scaled_sigmoid = ScaledSigmoid()
 
-    benchmark_on_cuda(modules={"xSSS Megatron": xsss_megatron, "xSSS Cuda Naive": xsss_cuda}, tensor_sizes=[1_000, 10_000, 100_000], baseline=("Scaled Sigmoid", scaled_sigmoid), mode="xSSS")
+    benchmark_on_cuda(modules={"xSSS Megatron": xsss_megatron, "xSSS Cuda Naive": xsss_cuda}, baseline=("Scaled Sigmoid", scaled_sigmoid), mode="xSSS", out_filename="xsss_scaledSigmoid")

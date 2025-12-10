@@ -1,35 +1,36 @@
 # Benchmarking
 
-## PyTorch Benchmarking
-### Benchmark our modules in PyTorch
+## PyTorch benchmarking
 ```bash
 pip install megatron-core
 python3 benchmarks/pytorch/sss_sigmoid_benchmark.py
+python3 benchmarks/pytorch/xsss_scaledSigmoid_benchmark.py
 ```
-or other benchmark files if applicable
-### Add other kernel implementations
-Create a PyTorch Wrapper in cuss/ops/
-In benchmarks/pytorch_benchmarks:
-- Copy the file sss_sigmoid_benchmark.py and adjust according to your needs
+and/or other benchmark files if applicable
 
-## CUDA Benchmarking
-### Directly benchmark the CUDA forward kernels
+### Visualize PyTorch benchmarking
+After executing 1 or more PyTorch benchmarks:
+```bash
+python3 benchmarks/plotting/create_graph.py
+```
+The resulting plots will be generated at benchmarks/results/pytorch_plots <br>
+
+## CUDA benchmarking
 ```bash
 cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cuda_benchmark
 ./build/cuda_benchmark
 ```
 
-### Visualize CUDA & PyTorch results
+### Visualize CUDA benchmarking
 ```bash
 python3 benchmarks/plotting/create_boxplots.py GH200
-python3 benchmarks/plotting/create_graph.py
 ```
-The resulting plot will be generated at benchmarks/results/ <br>
+The resulting plots will be generated at benchmarks/results/cuda_plots <br>
 If you have executed the benchmark on another GPU:
 - Add the GPU to benchmarks/device_specs/gpus.json
 - Adjust the argument "GH200" in the CUDA benchmarking call
 
-### Add other existing kernel implementations
+### Add other existing kernel implementations to CUDA benchmark
 In benchmarks/cuda_benchmarks/all_kernels_import.hpp: 
 - Add an import for the header file which references the kernel (such as #include "../../../../cusss/csrc/cuda/sss_cuda.hpp" for SSS)
 - Add the kernel in the kernel_benchmark.cu main() function (note that some kernels may have more parameters, such as parameter "a" in xSSS. Here is an example of how that may look like:)
@@ -43,6 +44,6 @@ In benchmarks/cuda_benchmarks/all_kernels_import.hpp:
     });
 ```
 
-### Alternatively: Add a kernel directly, without cusss implementation:
+#### Alternatively: Add a kernel directly, without cusss implementation:
 - In benchmarks/cuda/src/kernels/baseline_kernels add your kernel in baseline_kernels.cu and baseline_kernels.hpp
 - Add the kernel in the kernel_benchmark.cu main() function like above

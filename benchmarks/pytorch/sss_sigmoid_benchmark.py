@@ -27,4 +27,4 @@ if __name__ == "__main__":
     relu = torch.nn.ReLU()  
     iden = torch.nn.Identity()
 
-    benchmark_on_cuda(modules={"SSS Megatron": sss_megatron, "SSS Cuda Naive": sss_cuda, "ReLU torch": relu, "Identity torch": iden}, baseline=("Sigmoid torch", sigmoid))
+    benchmark_on_cuda(modules={"SSS Megatron": sss_megatron, "SSS Cuda Naive": sss_cuda}, baseline=("Sigmoid torch", sigmoid), mode="SSS", out_filename="sss_sigmoid")
