@@ -22,7 +22,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 zip-safe = false
-packages = ["cusss"]
+
+[tool.setuptools.packages.find]
+where = ["."]  # Assume 'cusss' folder is at the root of your repo
+include = ["cusss*"]  # Include cusss and all its subpackages (cusss.child1, etc.)
 
 [project.optional-dependencies]
 tests = [
