@@ -17,7 +17,54 @@ using torch::autograd::tensor_list;
         name " must be float or bfloat16!")
 
 // ===================================================================
-// CUDA KERNELS
+// Templated element-wise operations
+
+template <typename T> struct xsss_elementwise_op {
+  __device__ static T forward(T x, T a) {
+    float x_f = static_cast<float>(x);
+    float a_f = static_cast<float>(a);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float result = (x_f * inv) * a_f + 0.5f;
+    return static_cast<T>(result);
+  }
+
+  __device__ static T backward_x(T x, T a, T grad_output) {
+    float x_f = static_cast<float>(x);
+    float a_f = static_cast<float>(a);
+    float grad_output_f = static_cast<float>(grad_output);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float grad_input = grad_output_f * inv * inv * a_f;
+    return static_cast<T>(grad_input);
+  }
+
+  __device__ static T backward_a(T x, T grad_output) {
+    float x_f = static_cast<float>(x);
+    float grad_output_f = static_cast<float>(grad_output);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float grad_a = grad_output_f * x_f * inv;
+    return static_cast<T>(grad_a);
+  }
+};
+
+template <> struct xsss_elementwise_op<float> {
+  __device__ static float forward(float x, float a) {
+    float inv = __frcp_rn(1.0f + fabsf(x));
+    return (x * inv) * a + 0.5f;
+  }
+
+  __device__ static float backward_x(float x, float a, float grad_output) {
+    float inv = __frcp_rn(1.0f + fabsf(x));
+    return grad_output * inv * inv * a;
+  }
+
+  __device__ static float backward_a(float x, float grad_output) {
+    float inv = __frcp_rn(1.0f + fabsf(x));
+    return grad_output * x * inv;
+  }
+};
+
+// ===================================================================
+// CUDA Kernels
 
 template <typename scalar_t>
 __global__ void xsss_forward_kernel(const scalar_t* x, const scalar_t* a, scalar_t* output, int size) {

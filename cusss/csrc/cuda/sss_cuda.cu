@@ -13,8 +13,41 @@ using torch::TensorOptions;
 #define SSS_DTYPE_CHECK(tensor, name) \
     TORCH_CHECK(tensor.dtype() == torch::kFloat || tensor.dtype() == torch::kBFloat16 || tensor.dtype() == torch::kFloat8_e5m2, \
         name " must be float or bfloat16!")
+
 // ===================================================================
-// CUDA KERNELS
+// Templated element-wise operations
+
+template <typename T> struct sss_elementwise_op {
+  __device__ static T forward(T x) {
+    float x_f = static_cast<float>(x);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float result = (x_f * inv) * 0.5f + 0.5f;
+    return static_cast<T>(result);
+  }
+  __device__ static T backward(T x, T grad_output) {
+    float x_f = static_cast<float>(x);
+    float grad_output_f = static_cast<float>(grad_output);
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
+    float grad_input = grad_output_f * 0.5f * inv * inv;
+    return static_cast<T>(grad_input);
+  }
+};
+
+template <> struct sss_elementwise_op<float> {
+  __device__ static float forward(float x) {
+    float inv = __frcp_rn(1.0f + fabsf(x));
+    return (x * inv) * 0.5f + 0.5f;
+  }
+
+  __device__ static float backward(float x, float grad_output) {
+    float inv = __frcp_rn(1.0f + fabsf(x));
+    float grad_input = grad_output * 0.5f * inv * inv;
+    return grad_input;
+  }
+};
+
+// ===================================================================
+// CUDA Kernels
 
 template <typename scalar_t>
 __global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size) {
