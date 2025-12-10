@@ -128,7 +128,6 @@ def plot_mean_vs_size(
     plt.grid(True, which="both", ls="--", lw=0.5)
     if logx:
         plt.xscale("log")
-        plt.yscale("log")
     plt.legend(loc="best", fontsize="small")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
