@@ -1,6 +1,7 @@
 #include "sss_cuda.hpp"
-
+#include "../utils/template_utils.hpp"
 #include <cuda.h>
+#include <cuda_bf16.h>
 #include <torch/script.h>
 
 using namespace torch::indexing;
@@ -9,112 +10,97 @@ using namespace torch::autograd;
 using torch::Tensor;
 using torch::TensorOptions;
 
-
+#define SSS_DTYPE_CHECK(tensor, name) \
+    TORCH_CHECK(tensor.dtype() == torch::kFloat || tensor.dtype() == torch::kBFloat16 || tensor.dtype() == torch::kFloat8_e5m2, \
+        name " must be float or bfloat16!")
 // ===================================================================
 // CUDA KERNELS
 
-__global__ void sss_forward_kernel(const float* x, float* output, int size) {
+template <typename scalar_t>
+__global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // index in units of float4
-    int i4 = tid;
-    int base = i4 * 4;
+    using Traits = VectorIO<scalar_t>;
+    using vec_t = typename Traits::vec_t;
+    using native_t = typename Traits::native_t;
+    constexpr int vec_size = Traits::packed_size;
 
-    if (base + 3 < size) {
+    int i_vec = tid;
+    int base = i_vec * vec_size;
+
+    if (base + vec_size - 1 < size) {
         // vectorized load
-        float4 v = reinterpret_cast<const float4*>(x)[i4];
+        vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
 
-        // Explicit scalar lanes
-        float e0 = v.x;
-        float e1 = v.y;
-        float e2 = v.z;
-        float e3 = v.w;
-
-        // elementwise SSS computation
-        float o0 = (e0 * __frcp_rn(1.0f + fabsf(e0))) * 0.5f + 0.5f;
-        float o1 = (e1 * __frcp_rn(1.0f + fabsf(e1))) * 0.5f + 0.5f;
-        float o2 = (e2 * __frcp_rn(1.0f + fabsf(e2))) * 0.5f + 0.5f;
-        float o3 = (e3 * __frcp_rn(1.0f + fabsf(e3))) * 0.5f + 0.5f;
-
-        // pack results
-        float4 out;
-        out.x = o0;
-        out.y = o1;
-        out.z = o2;
-        out.w = o3;
+        // apply operation
+        vec_t out = Traits::template apply<sss_elementwise_op<native_t>>(v);
 
         // vectorized store
-        reinterpret_cast<float4*>(output)[i4] = out;
+        reinterpret_cast<vec_t*>(output)[i_vec] = out;
     }
 }
 
-__global__ void sss_backward_kernel(const float* x, const float* grad_out, float* grad_x, int size) {
+template <typename scalar_t>
+__global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out, scalar_t* grad_x, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // index in units of float4
-    int i4 = tid;
-    int base = i4 * 4;
+    using Traits = VectorIO<scalar_t>;
+    using vec_t = typename Traits::vec_t;
+    using native_t = typename Traits::native_t;
+    constexpr int vec_size = Traits::packed_size;
 
-    if (base + 3 < size) {
+    int i_vec = tid;
+    int base = i_vec * vec_size;
+
+    if (base + vec_size - 1 < size) {
         // vectorized load
-        float4 v = reinterpret_cast<const float4*>(x)[i4];
-        float4 g = reinterpret_cast<const float4*>(grad_out)[i4];
+        vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
+        vec_t g = reinterpret_cast<const vec_t*>(grad_out)[i_vec];
 
-        // Explicit scalar lanes
-        float e0 = v.x;
-        float e1 = v.y;
-        float e2 = v.z;
-        float e3 = v.w;
-
-        // elementwise SSS computation
-        float inv0 = __frcp_rn(1.0f + fabsf(e0));
-        float o0 = (inv0 * inv0) * 0.5f;
-        float inv1 = __frcp_rn(1.0f + fabsf(e1));
-        float o1 = (inv1 * inv1) * 0.5f;
-        float inv2 = __frcp_rn(1.0f + fabsf(e2));
-        float o2 = (inv2 * inv2) * 0.5f;
-        float inv3 = __frcp_rn(1.0f + fabsf(e3));
-        float o3 = (inv3 * inv3) * 0.5f;
-
-        // pack results
-        float4 out;
-        out.x = g.x * o0;
-        out.y = g.y * o1;
-        out.z = g.z * o2;
-        out.w = g.w * o3;
+        // apply backward operation
+        vec_t out = Traits::template apply_backward<sss_elementwise_op<native_t>>(v, g);
 
         // vectorized store
-        reinterpret_cast<float4*>(grad_x)[i4] = out;
-    } 
+        reinterpret_cast<vec_t*>(grad_x)[i_vec] = out;
+    }
 }
+
 
 // ===================================================================
 // Kernel Launchers
 
-at::Tensor sss_forward_cuda(const at::Tensor& x) {
-    TORCH_CHECK(x.dtype() == torch::kFloat, "Input tensor must be float!");
+at::Tensor sss_forward_cuda(const at::Tensor& x_in) {
+    auto x = fp8_to_float(x_in);
+    SSS_DTYPE_CHECK(x, "Input tensor");
     TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
 
     // x = x.contiguous();
     auto output = torch::empty_like(x).contiguous();
     int size = x.numel();
-    
+
     // @TODO: Better kernel launch configuration
-    int blockSize = 128;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    int blockSize = 256;
+    int vec_size = get_vector_size(x.scalar_type());
+    int num_vec = size / vec_size;
+    int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    sss_forward_kernel<<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(), output.data_ptr<float>(), size
-    );
-
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::kHalf, at::kBFloat16, x.scalar_type(), "sss_forward_cuda", [&] {
+        sss_forward_kernel<scalar_t><<<numBlocks, blockSize>>>(
+            x.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            size);
+        });
+    output = float_to_fp8(output, x.scalar_type());
     return output;
 }
 
-at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output) {
-    TORCH_CHECK(x.dtype() == torch::kFloat, "Input tensor must be float!");
+at::Tensor sss_backward_cuda(const at::Tensor& x_in, const at::Tensor& grad_output_in) {
+    auto x = fp8_to_float(x_in);
+    SSS_DTYPE_CHECK(x, "Input tensor");  
     TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
-    TORCH_CHECK(grad_output.dtype() == torch::kFloat, "Grad tensor must be float!");
+    auto grad_output = fp8_to_float(grad_output_in);
+    SSS_DTYPE_CHECK(grad_output, "Grad tensor");
     TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
     TORCH_CHECK(x.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
 
@@ -123,15 +109,18 @@ at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output)
     int size = x.numel();
 
     int blockSize = 128;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    int vec_size = get_vector_size(x.scalar_type());
+    int num_vec = size/vec_size;
+    int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    sss_backward_kernel<<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(),
-        grad_output_contig.data_ptr<float>(),
-        grad_x.data_ptr<float>(),
-        size
-    );
-
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
+        sss_backward_kernel<scalar_t><<<numBlocks, blockSize>>>(
+            x.data_ptr<scalar_t>(),
+            grad_output_contig.data_ptr<scalar_t>(),
+            grad_x.data_ptr<scalar_t>(),
+            size
+        );
+      });
+    grad_x = float_to_fp8(grad_x, x.scalar_type());
     return grad_x;
 }

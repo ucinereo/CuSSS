@@ -87,29 +87,29 @@ void print_result(const std::string& name, int n, int block,
 // A wrapper for ANY kernel with signature:
 // __global__ void kernel(const float*, float*, int);
 // ------------------------------------------------------------
+template <typename scalar_t>
 struct KernelWrapper {
     std::string name;
-    std::function<void (const float*, float*, int, dim3, dim3)> func;
+    std::function<void (const scalar_t*, scalar_t*, int, dim3, dim3)> func;
     dim3 grid;
     dim3 block;
     int num_floats_per_kernel;
 };
 
 // ------------------------------------------------------------
-// Launch helper (kernel function pointer cannot be invoked directly)
-// We wrap the <<<grid,block>>> inside a templated ‘launcher’.
+// Launch helper for template kernels
 // ------------------------------------------------------------
-template <void (*kernel)(const float*, float*, int)>
-void launch_kernel(dim3 grid, dim3 block,
-                   const float* x, float* y, int n) {
-    kernel<<<grid, block>>>(x, y, n);
+template<typename scalar_t>
+__host__ void launch_sss_forward(const scalar_t* x, scalar_t* y, int n, dim3 grid, dim3 block) {
+    sss_forward_kernel<scalar_t><<<grid, block>>>(x, y, n);
 }
 
 // ------------------------------------------------------------
 // Benchmark function
 // ------------------------------------------------------------
-std::vector<float> benchmark(const KernelWrapper& k,
-                const float* x, float* y, int n, int iters)
+template <typename scalar_t>
+std::vector<scalar_t> benchmark(const KernelWrapper<scalar_t>& k,
+                const scalar_t* x, scalar_t* y, int n, int iters)
 {
     std::vector<float> measurements(iters, 0);
 
@@ -157,7 +157,7 @@ int main() {
     std::vector<int> block_sizes = {128, 256, 512, 1024};
 
     // Register kernels in a vector
-    std::vector<KernelWrapper> kernels;
+    std::vector<KernelWrapper<float>> kernels;
 
     // Initialize block and grid to value 0 (gets adjusted in the benchmarking-for-loop anyways)
     dim3 block(0);
@@ -182,7 +182,7 @@ int main() {
     kernels.push_back({
         "SSS",
         [] (const float* x, float* y, int m, dim3 grid, dim3 block) {
-            sss_forward_kernel<<<grid, block>>>(x, y, m);
+            launch_sss_forward<float>(x, y, m, grid, block);
         },
         grid, block, 4
     });
