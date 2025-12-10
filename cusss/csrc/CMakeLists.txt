@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.18) # Bumped to 3.18 for better CUDA support
 project(cusss LANGUAGES CXX)
 
 set(LIB_INSTALL_DIR "lib" CACHE PATH "Path relative to CMAKE_INSTALL_PREFIX where to install libraries")
@@ -28,11 +28,8 @@ message(FATAL_ERROR "failed to find your pytorch installation, error: ${TORCH_CM
 endif()
 
 string(STRIP ${TORCH_CMAKE_PATH_OUTPUT} TORCH_CMAKE_PATH_OUTPUT)
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${TORCH_CMAKE_PATH_OUTPUT}")
-
-message(STATUS "TORCH_CMAKE_PATH_OUTPUT: ${TORCH_CMAKE_PATH_OUTPUT}")
-
-find_package(Torch 2.0 REQUIRED)
+list(APPEND CMAKE_PREFIX_PATH "${TORCH_CMAKE_PATH_OUTPUT}")
+find_package(Torch REQUIRED)
 
 add_library(cusss SHARED
     # SSS Kernel
@@ -46,6 +43,27 @@ add_library(cusss SHARED
     "cuda/sssglu_cuda.cu"
 
     # @TODO: Add other SSS variants here
+)
+
+# =========================================================================
+# Optimization Flags
+
+target_compile_options(cusss PRIVATE
+    # C++ Host Flags
+    $<$<COMPILE_LANGUAGE:CXX>:
+        -O3
+        -march=native
+        -Wno-stringop-overflow  # Silence the GCC 13 std::vector warnings
+        -Wno-maybe-uninitialized
+    >
+
+    # CUDA Device Flags
+    $<$<COMPILE_LANGUAGE:CUDA>:
+        -O3
+        --use_fast_math           # The most important speed flag
+        --expt-relaxed-constexpr
+        -Xptxas=-O3
+    >
 )
 
 target_include_directories(cusss PRIVATE
@@ -71,6 +89,6 @@ endif()
 target_compile_features(cusss PRIVATE cxx_std_17)
 
 install(TARGETS cusss
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${LIB_INSTALL_DIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/${BIN_INSTALL_DIR}
+    LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+    RUNTIME DESTINATION ${BIN_INSTALL_DIR}
 )
