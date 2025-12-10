@@ -38,17 +38,28 @@ pytest tests/ -v
 ```
 
 ## Benchmarking
-### Benchmark our SSS Implementations vs PyTorch Sigmoid
+### PyTorch benchmarking
 ```bash
 pip install megatron-core
-python3 benchmarks/sss_sigmoid_benchmark.py
+python3 benchmarks/pytorch/sss_sigmoid_benchmark.py
 ```
+or other benchmark files if applicable
 
-### Benchmark SSS forward vs Sigmoid forward kernels
+### CUDA benchmarking
 ```bash
-nvcc benchmarks/kernel_benchmark.cu -O3 -o ./build/cuda_benchmark
+cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cuda_benchmark
 ./build/cuda_benchmark
 ```
+
+### Visualize CUDA & PyTorch results
+```bash
+python3 benchmarks/plotting/create_boxplots.py GH200
+python3 benchmarks/plotting/create_graph.py
+```
+The resulting plot will be generated at benchmarks/results/ <br>
+If you have executed the benchmark on another GPU:
+- Add the GPU to benchmarks/device_specs/gpus.json
+- Adjust the argument "GH200" in the CUDA benchmarking call
 
 # Acknowledgments
 - Cuda implementation of [xielu](https://github.com/rubber-duck-debug/xielu) for repository structure.
