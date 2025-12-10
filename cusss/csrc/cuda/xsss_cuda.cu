@@ -56,6 +56,12 @@ __global__ void xsss_backward_kernel(const float* x, const float* a, const float
     int i4 = tid;
     int base = i4 * 4;
 
+    // declare shared memory for block-wise reduction
+    extern __shared__ float sdata[]; // allocated at launch: blockDim.x * sizeof(float)
+
+    // compute local contribution; threads out-of-range write 0.0f so they participate correctly in reduction
+    float local_a = 0.0f;
+
     if (base + 3 < size) {
         // vectorized load
         float4 vx = reinterpret_cast<const float4*>(x)[i4];
@@ -95,8 +101,24 @@ __global__ void xsss_backward_kernel(const float* x, const float* a, const float
         outx.w = o3x;
         reinterpret_cast<float4*>(grad_x)[i4] = outx;
 
-        // accumulate gradient for a
-        atomicAdd(grad_a, o0a + o1a + o2a + o3a);
+        local_a = o0a + o1a + o2a + o3a;
+    }
+
+    // write local contribution into shared memory for reduction
+    sdata[threadIdx.x] = local_a;
+    __syncthreads();
+
+    // reduce in shared memory
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (threadIdx.x < s) {
+            sdata[threadIdx.x] += sdata[threadIdx.x + s];
+        }
+        __syncthreads();
+    }
+
+    // thread 0 performs a single atomic add to global grad_a
+    if (threadIdx.x == 0) {
+        atomicAdd(grad_a, sdata[0]);
     }
 }
 
@@ -146,7 +168,8 @@ tensor_list xsss_backward_cuda(const at::Tensor& x, const at::Tensor& a, const a
     int num4 = size/4;
     int numBlocks = (num4 + blockSize - 1) / blockSize;
 
-    xsss_backward_kernel<<<numBlocks, blockSize>>>(
+    // allocate shared memory: one float per thread for partial sums
+    xsss_backward_kernel<<<numBlocks, blockSize, blockSize * sizeof(float)>>> (
         x.data_ptr<float>(),
         a.data_ptr<float>(),
         grad_output_contig.data_ptr<float>(),
