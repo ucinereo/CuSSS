@@ -2,27 +2,32 @@
 #define TEMPLATE_UTILS_HPP
 
 #include <cuda.h>
-#include <torch/script.h>
 #include <cuda_bf16.h>
+#include <cuda_fp8.h>
+#include <torch/script.h>
+#include <iostream>
 
 // ===================================================================
 // Default: conversion to float
 template <typename T> struct sss_elementwise_op {
   __device__ static T forward(T x) {
     float x_f = static_cast<float>(x);
-    float inv = __frcp_rn(1.0f + fabsf(x));
+    float inv = __frcp_rn(1.0f + fabsf(x_f));
     float result = (x_f * inv) * 0.5f + 0.5f;
     return static_cast<T>(result);
   }
   __device__ static T backward(T x, T grad_output) {
+    printf("[CUDA] x: %.15f, grad_out: %.15f\n", static_cast<float>(x), static_cast<float>(grad_output));
     float x_f = static_cast<float>(x);
     float grad_output_f = static_cast<float>(grad_output);
     float inv = __frcp_rn(1.0f + fabsf(x_f));
     float grad_input = grad_output_f * 0.5f * inv * inv;
+    // float denom = 1.0f + fabsf(x_f);
+    // float grad_input = (0.5f / (denom * denom)) * grad_output_f;
+    printf("[CUDA] grad_in: %.15f\n", grad_input);
     return static_cast<T>(grad_input);
   }
 };
-
 
 template <> struct sss_elementwise_op<float> {
   __device__ static float forward(float x) {
@@ -124,38 +129,47 @@ template <> struct sss_elementwise_op<float> {
 //   }
 // };
 
-
 // ===================================================================
 // Helper for applying element-wise operations to vector types
-template<typename vec_t, typename native_t, int N>
-struct VectorApplyHelper;
+template <typename vec_t, typename native_t, int N> struct VectorApplyHelper;
 
 // Specialization for 4-element vectors (float4, double4)
-template<typename vec_t, typename native_t>
+template <typename vec_t, typename native_t>
 struct VectorApplyHelper<vec_t, native_t, 4> {
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
-    return {Op::forward(v.x), Op::forward(v.y), Op::forward(v.z), Op::forward(v.w)};
+  template <typename Op> __device__ static vec_t apply(const vec_t &v) {
+    return {Op::forward(v.x), Op::forward(v.y), Op::forward(v.z),
+            Op::forward(v.w)};
   }
 
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
+  template <typename Op>
+  __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
     return {Op::backward(v.x, grad.x), Op::backward(v.y, grad.y),
             Op::backward(v.z, grad.z), Op::backward(v.w, grad.w)};
   }
 };
 
 // Specialization for 2-element vectors (__half2, __nv_bfloat162)
-template<typename vec_t, typename native_t>
+template <typename vec_t, typename native_t>
 struct VectorApplyHelper<vec_t, native_t, 2> {
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
+  template <typename Op> __device__ static vec_t apply(const vec_t &v) {
     return {Op::forward(v.x), Op::forward(v.y)};
   }
 
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
+  template <typename Op>
+  __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
     return {Op::backward(v.x, grad.x), Op::backward(v.y, grad.y)};
+  }
+};
+
+template <typename vec_t, typename native_t>
+struct VectorApplyHelper<vec_t, native_t, 1> {
+  template <typename Op> __device__ static vec_t apply(const vec_t &v) {
+    return Op::forward(v);
+  }
+
+  template <typename Op>
+  __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
+    return Op::backward(v, grad);
   }
 };
 
@@ -163,94 +177,78 @@ struct VectorApplyHelper<vec_t, native_t, 2> {
 // VectorIO Traits structs for double, float, half, bfloat16
 template <typename scalar_t> struct VectorIO;
 
-template <> struct VectorIO<float> {
-  using scalar_t = float;
-  using native_t = float;
-  using vec_t = float4;
-  using reduction_t = float;
+// Base helper to avoid repetition in VectorIO specializations
+template <typename ScalarT, typename NativeT, typename VecT,
+          typename ReductionT, int PackedSize>
+struct VectorIOBase {
+  using scalar_t = ScalarT;
+  using native_t = NativeT;
+  using vec_t = VecT;
+  using reduction_t = ReductionT;
 
-  const static int packed_size = 4;
+  const static int packed_size = PackedSize;
 
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply<Op>(v);
+  template <typename Op> __device__ static vec_t apply(const vec_t &v) {
+    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply<Op>(
+        v);
   }
 
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply_backward<Op>(v, grad);
-  }
-};
-
-template <> struct VectorIO<double> {
-  using scalar_t = double;
-  using native_t = double;
-  using vec_t = double4;
-  using reduction_t = double;
-
-  const static int packed_size = 4;
-
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply<Op>(v);
-  }
-
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply_backward<Op>(v, grad);
+  template <typename Op>
+  __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
+    return VectorApplyHelper<vec_t, native_t,
+                             packed_size>::template apply_backward<Op>(v, grad);
   }
 };
 
-template <> struct VectorIO<c10::Half> {
-  using scalar_t = c10::Half;
-  using native_t = __half;
-  using vec_t = __half2;
-  using reduction_t = float;
+template <>
+struct VectorIO<float> : VectorIOBase<float, float, float4, float, 4> {};
 
-  const static int packed_size = 2;
+template <>
+struct VectorIO<double> : VectorIOBase<double, double, double4, double, 4> {};
 
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply<Op>(v);
+template <>
+struct VectorIO<c10::Half>
+    : VectorIOBase<c10::Half, __half, __half2, float, 2> {};
+
+template <>
+struct VectorIO<c10::BFloat16>
+    : VectorIOBase<c10::BFloat16, __nv_bfloat16, __nv_bfloat162, float, 2> {};
+
+// template <> struct VectorIO<c10::Float8_e5m2>
+//   : VectorIOBase<c10::Float8_e5m2, __nv_fp8_e5m2, __nv_fp8_e5m2, float, 1>
+//   {};
+
+inline at::Tensor fp8_to_float(const at::Tensor &x) {
+  if (x.scalar_type() == torch::kFloat8_e5m2 ||
+      x.scalar_type() == torch::kFloat8_e4m3fn) {
+    return x.to(torch::kFloat);
+  } else {
+    return x;
   }
+}
 
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply_backward<Op>(v, grad);
+inline at::Tensor float_to_fp8(const at::Tensor &x, torch::Dtype dtype) {
+  if (dtype == torch::kFloat8_e5m2 || dtype == torch::kFloat8_e4m3fn) {
+    return x.to(dtype);
+  } else {
+    return x;
   }
-};
-
-template <> struct VectorIO<c10::BFloat16> {
-  using scalar_t = c10::BFloat16;
-  using native_t = __nv_bfloat16;
-  using vec_t = __nv_bfloat162;
-  using reduction_t = float;
-
-  const static int packed_size = 2;
-
-  template<typename Op>
-  __device__ static vec_t apply(const vec_t& v) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply<Op>(v);
-  }
-
-  template<typename Op>
-  __device__ static vec_t apply_backward(const vec_t& v, const vec_t& grad) {
-    return VectorApplyHelper<vec_t, native_t, packed_size>::template apply_backward<Op>(v, grad);
-  }
-};
+}
 
 inline int get_vector_size(torch::Dtype dtype) {
-    switch (dtype) {
-        case torch::kFloat:
-        case torch::kDouble:
-            return 4;
-        case torch::kHalf:
-        case torch::kBFloat16:
-            return 2;
-        default:
-            TORCH_CHECK(false, "Unsupported dtype for vectorization");
-            return 1;
-    }
+  switch (dtype) {
+  case torch::kFloat:
+  case torch::kDouble:
+    return 4;
+  case torch::kHalf:
+  case torch::kBFloat16:
+    return 2;
+  case torch::kFloat8_e5m2:
+    return 1;
+  default:
+    TORCH_CHECK(false, "Unsupported dtype for vectorization");
+    return 1;
+  }
 }
 
 #endif // TEMPLATE_UTILS_HPP
