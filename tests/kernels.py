@@ -4,7 +4,7 @@ Kernel registry with reference PyTorch implementations for parity testing.
 
 import torch
 from dataclasses import dataclass
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict
 
 from cusss import SSS, xSSS
 
@@ -16,7 +16,6 @@ class KernelSpec:
     name: str
     cuda_module: torch.nn.Module
     pytorch_forward: Callable[..., torch.Tensor]
-    pytorch_backward: Callable[..., Tuple[torch.Tensor, ...]]
     input_generator: Callable[[torch.device], Dict[str, torch.Tensor]]
 
 
@@ -24,14 +23,7 @@ class KernelSpec:
 
 
 def sss_pytorch_forward(x: torch.Tensor) -> torch.Tensor:
-    return 0.5 * (x / (1.0 + x.abs()) + 1.0)
-
-
-def sss_pytorch_backward(
-    x: torch.Tensor, grad_out: torch.Tensor
-) -> Tuple[torch.Tensor]:
-    grad_x = grad_out * 0.5 / (1.0 + x.abs()).pow(2)
-    return (grad_x,)
+    return 0.5 * torch.nn.functional.softsign(x) + 0.5
 
 
 def sss_input_generator(device: torch.device) -> Dict[str, torch.Tensor]:
@@ -42,7 +34,6 @@ SSS_SPEC = KernelSpec(
     name="sss",
     cuda_module=SSS,
     pytorch_forward=sss_pytorch_forward,
-    pytorch_backward=sss_pytorch_backward,
     input_generator=sss_input_generator,
 )
 
@@ -51,16 +42,7 @@ SSS_SPEC = KernelSpec(
 
 
 def xsss_pytorch_forward(x: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
-    return a * x / (1.0 + x.abs()) + 0.5
-
-
-def xsss_pytorch_backward(
-    x: torch.Tensor, a: torch.Tensor, grad_out: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    inv = 1.0 / (1.0 + x.abs())
-    grad_x = grad_out * a * inv * inv
-    grad_a = (grad_out * x * inv).sum().view_as(a)
-    return (grad_x, grad_a)
+    return a * torch.nn.functional.softsign(x) + 0.5
 
 
 def xsss_input_generator(device: torch.device) -> Dict[str, torch.Tensor]:
@@ -74,7 +56,6 @@ XSSS_SPEC = KernelSpec(
     name="xsss",
     cuda_module=xSSS,
     pytorch_forward=xsss_pytorch_forward,
-    pytorch_backward=xsss_pytorch_backward,
     input_generator=xsss_input_generator,
 )
 
@@ -91,7 +72,3 @@ def get_kernel(name: str) -> KernelSpec:
             f"Unknown kernel: {name}. Available: {list(KERNEL_REGISTRY.keys())}"
         )
     return KERNEL_REGISTRY[name]
-
-
-def all_kernel_names():
-    return list(KERNEL_REGISTRY.keys())
