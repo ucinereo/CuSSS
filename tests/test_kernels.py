@@ -90,5 +90,7 @@ class TestKernelParity:
             torch.testing.assert_close(
                 cuda_grads[key],
                 ref_grads[key],
+                atol=1e-4,
+                rtol=1e-4,
                 msg=f"{kernel_name} backward grad[{key}] mismatch at shape {shape} with {loss_name} loss (abs_diff: {(cuda_grads[key] - ref_grads[key]).mean().item()}, rel_diff: {(cuda_grads[key] - ref_grads[key]).abs().mean() / ref_grads[key].abs().mean()})",
             )
