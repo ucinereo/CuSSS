@@ -145,33 +145,43 @@ def plot_mean_vs_size(
 
 
 def main() -> None:
-    input_path = Path("benchmarks/results/pytorch.json")
-    output_path = Path("benchmarks/results/plots/graph_pytorch/")
 
-    
-    data = load_benchmark_json(input_path)
-    if not data:
-        raise SystemExit(f"No data found in {input_path}")
+    input_path = Path("benchmarks/results/pytorch_jsons/")
+    output_base_path = Path("benchmarks/results/pytorch_plots/")
 
-    out_forward = output_path / "forward"
-    sizes, series = prepare_series(data, direction="forward")
-    title = f"Forward mean time vs tensor size"
-    plot_mean_vs_size(sizes, series, out_forward, title=title, logx=True)
+    # Collect json files: if input_path is a directory, iterate over all .json files
+    if input_path.is_dir():
+        json_files = sorted(input_path.glob("*.json"))
+    else:
+        json_files = [input_path]
 
-    print(f"Wrote forward plot to {out_forward} (or same name with .pdf/.svg)")
+    if not json_files:
+        raise SystemExit(f"No JSON files found in {input_path}")
 
-    out_backward = output_path / "backward"
-    sizes, series = prepare_series(data, direction="backward")
-    title = f"Backward mean time vs tensor size"
-    plot_mean_vs_size(sizes, series, out_backward, title=title, logx=True)
+    for jf in json_files:
+        print(f"Plotting {jf.stem}...")
+        data = load_benchmark_json(jf)
 
-    print(f"Wrote forward plot to {out_backward} (or same name with .pdf/.svg)")
+        output_path = output_base_path / jf.stem
 
-    sizes, series = prepare_series(data, direction="combined")
-    out_combined = output_path / "combined"
-    title = f"Combined (2x forward + 1x backward) mean time vs tensor size"
-    plot_mean_vs_size(sizes, series, out_combined, title=title, logx=True)  
-    print(f"Wrote combined plot to {out_combined} (or same name with .pdf/.svg)")
+        if not data:
+            raise SystemExit(f"No data found in {input_path}")
+
+        out_forward = output_path / "forward"
+        sizes, series = prepare_series(data, direction="forward")
+        title = f"Forward mean time vs tensor size"
+        plot_mean_vs_size(sizes, series, out_forward, title=title, logx=True)
+
+        out_backward = output_path / "backward"
+        sizes, series = prepare_series(data, direction="backward")
+        title = f"Backward mean time vs tensor size"
+        plot_mean_vs_size(sizes, series, out_backward, title=title, logx=True)
+
+        sizes, series = prepare_series(data, direction="combined")
+        out_combined = output_path / "combined"
+        title = f"Combined (2x forward + 1x backward) mean time vs tensor size"
+        plot_mean_vs_size(sizes, series, out_combined, title=title, logx=True)  
+        print(f"Wrote plots to {output_path}")
 
 if __name__ == "__main__":
     main()

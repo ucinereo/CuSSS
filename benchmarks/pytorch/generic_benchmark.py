@@ -79,8 +79,9 @@ def compare_and_print_results(results, baseline_key, func_type):
 def benchmark_on_cuda(
     modules: dict[str, torch.nn.Module],
     baseline: tuple[str, torch.nn.Module],
-    tensor_sizes: list[int] = [10_753, 21_504, 43_008], # 2nd and 3rd correspond to Apertus 8B, 70B
-    mode: str = "SSS"
+    mode: str,
+    out_filename: str,
+    tensor_sizes: list[int] = [10_752, 21_504, 43_008], # 2nd and 3rd correspond to Apertus 8B, 70B
 ):
     """
     Generic benchmark function which takes some modules (here for the activation functions) and records the time
@@ -90,8 +91,8 @@ def benchmark_on_cuda(
     device = torch.device("cuda")
 
     WARMUP_PASSES = 100
-    MEASUREMENTS = 10
-    PASSES_PER_MEASUREMENT = 100
+    MEASUREMENTS = 100
+    PASSES_PER_MEASUREMENT = 10
 
     baseline_name, baseline_module = baseline
     baseline_name = f"{baseline_name} [Baseline]"
@@ -104,6 +105,8 @@ def benchmark_on_cuda(
         size = (1, 4096, size)
 
         x = torch.randn(size, device=device, requires_grad=True)
+        x2 = torch.randn(size, device=device, requires_grad=True)
+
         target = torch.randn(size, device=device, requires_grad=True)
         a = torch.randn(1, device=device, requires_grad=True) # for xSSS
 
@@ -128,6 +131,8 @@ def benchmark_on_cuda(
                     y = activ_fn(x)
                 elif mode == "xSSS":
                     y = activ_fn(x, a)
+                elif mode == "SSSGLU":
+                    y = activ_fn(x, x2)
 
             forward_passes_times = []
 
@@ -143,6 +148,8 @@ def benchmark_on_cuda(
                         y = activ_fn(x)
                     elif mode == "xSSS":
                         y = activ_fn(x, a)
+                    elif mode == "SSSGLU":
+                        y = activ_fn(x, x2)
                 end.record()
                 torch.cuda.synchronize()
                 time_per_gigabyte = start.elapsed_time(end) / (num_giga_bytes * PASSES_PER_MEASUREMENT)
@@ -228,7 +235,7 @@ def benchmark_on_cuda(
         }
 
     # If requested, save a JSON with raw timings and computed stats for this tensor size
-    out_path = Path("benchmarks/results/pytorch.json")
+    out_path = Path(f"benchmarks/results/pytorch_jsons/{out_filename}.json")
 
     # write back
     out_path.parent.mkdir(parents=True, exist_ok=True)
