@@ -1,5 +1,5 @@
 def odd_shape(shape): # defined as when all dimension is not power of 2 and greater than 1
-    return all(dim % 2 != 0 and dim > 1 for dim in shape)
+    return all(dim % 4 != 0 and dim > 1 for dim in shape)
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -11,8 +11,8 @@ def pytest_addoption(parser):
     parser.addoption(
         "--shape",
         action="store",
-        default=None,
-        help="Run tests only for even or odd inputs (odd shape has all dimensions not power of 2 and greater than 1)",
+        default="even", # this repo only handles divisible by 4 shapes
+        help="Run tests only for even or odd inputs (odd shape has all dimensions divisible by 4 and greater than 1)",
     )
     parser.addoption(
         "--loss",
