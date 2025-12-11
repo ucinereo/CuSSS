@@ -27,8 +27,16 @@ HS2025
 
 ## Installation
 
+Needs CUDA toolkit to be available. (see CSCS.md for instructions on how to set up the environment on CSCS cluster)
+
 ```bash
 pip install . --no-build-isolation --no-deps
+```
+
+or using uv:
+
+```bash
+make install
 ```
 
 ## Testing
@@ -37,13 +45,27 @@ pip install . --no-build-isolation --no-deps
 pytest tests/ -v
 ```
 
+or using makefile:
+
+```bash
+make test
+```
+
 ## Benchmarking
 ### PyTorch benchmarking
 ```bash
 pip install megatron-core
 python3 benchmarks/pytorch/sss_sigmoid_benchmark.py
+python3 benchmarks/pytorch/xsss_scaledSigmoid_benchmark.py
 ```
-or other benchmark files if applicable
+and/or other benchmark files if applicable
+
+#### Visualize PyTorch benchmarking
+After executing 1 or more PyTorch benchmarks:
+```bash
+python3 benchmarks/plotting/create_graph.py
+```
+The resulting plots will be generated at benchmarks/results/pytorch_plots <br>
 
 ### CUDA benchmarking
 ```bash
@@ -51,12 +73,11 @@ cmake -S benchmarks/cuda/ -B build && cmake --build build --parallel --target cu
 ./build/cuda_benchmark
 ```
 
-### Visualize CUDA & PyTorch results
+#### Visualize CUDA benchmarking
 ```bash
 python3 benchmarks/plotting/create_boxplots.py GH200
-python3 benchmarks/plotting/create_graph.py
 ```
-The resulting plot will be generated at benchmarks/results/ <br>
+The resulting plots will be generated at benchmarks/results/cuda_plots <br>
 If you have executed the benchmark on another GPU:
 - Add the GPU to benchmarks/device_specs/gpus.json
 - Adjust the argument "GH200" in the CUDA benchmarking call
