@@ -6,7 +6,7 @@ import torch
 from dataclasses import dataclass
 from typing import Callable, Dict
 
-from cusss import SSS, xSSS
+from cusss import SSS, xSSS, SSSGLU
 
 
 @dataclass
@@ -26,8 +26,8 @@ def sss_pytorch_forward(x: torch.Tensor) -> torch.Tensor:
     return 0.5 * torch.nn.functional.softsign(x) + 0.5
 
 
-def sss_input_generator(device: torch.device) -> Dict[str, torch.Tensor]:
-    return {"x": torch.randn(64, 512, device=device, requires_grad=True)}
+def sss_input_generator(shape: tuple, device: torch.device) -> Dict[str, torch.Tensor]:
+    return {"x": torch.randn(*shape, device=device, requires_grad=True)}
 
 
 SSS_SPEC = KernelSpec(
@@ -45,9 +45,9 @@ def xsss_pytorch_forward(x: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
     return a * torch.nn.functional.softsign(x) + 0.5
 
 
-def xsss_input_generator(device: torch.device) -> Dict[str, torch.Tensor]:
+def xsss_input_generator(shape: tuple, device: torch.device) -> Dict[str, torch.Tensor]:
     return {
-        "x": torch.randn(64, 64, device=device, requires_grad=True),
+        "x": torch.randn(*shape, device=device, requires_grad=True),
         "a": torch.randn(1, device=device, requires_grad=True),
     }
 
@@ -59,10 +59,30 @@ XSSS_SPEC = KernelSpec(
     input_generator=xsss_input_generator,
 )
 
+# SSSGLU Kernel
+
+def sssglu_pytorch_forward(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    return sss_pytorch_forward(x) * y * x
+
+def sssglu_input_generator(shape: tuple, device: torch.device) -> Dict[str, torch.Tensor]:
+    return {
+        "x": torch.randn(*shape, device=device, requires_grad=True),
+        "y": torch.randn(*shape, device=device, requires_grad=True),
+    }
+
+SSSGLU_SPEC = KernelSpec(
+    name="sssglu",
+    cuda_module=SSSGLU,
+    pytorch_forward=sssglu_pytorch_forward,
+    input_generator=sssglu_input_generator,
+)
+
+# ------- Kernel Registry -------
 
 KERNEL_REGISTRY: Dict[str, KernelSpec] = {
     "sss": SSS_SPEC,
     "xsss": XSSS_SPEC,
+    "sssglu": SSSGLU_SPEC,
 }
 
 
