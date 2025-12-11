@@ -7,6 +7,8 @@ Usage:
     pytest tests/test_kernels.py --kernel xsss      # Run only xSSS tests
     pytest tests/test_kernels.py -k forward         # Run only forward tests
     pytest tests/test_kernels.py -k backward        # Run only backward tests
+    pytest tests/test_kernels.py --loss l2          # Run only one loss {sum, mean, l2, mse}
+    pytest tests/test_kernels.py --shape odd        # Run only tests odd or even shaped inputs {odd, even}
 """
 
 import pytest
@@ -17,25 +19,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from kernels import KERNEL_REGISTRY, get_kernel
+from conftest import odd_shape
 
 
 @pytest.fixture
 def device():
     return torch.device("cuda")
 
-
-SHAPES = [(32, 32), (128, 256), (1, 1024), (1024, 1), (64, 512)]
+# -------|.............................even .................. | ........... odd ...........................|
+SHAPES = [(32, 32), (128, 256), (1, 1024), (1024, 1), (64, 512), (31, 33), (125, 255), (3, 1023), (769, 73)]
 
 LOSS_FUNCTIONS = [
     ("sum", lambda x: x.sum()),
     ("mean", lambda x: x.mean()),
     ("l2", lambda x: (x**2).sum()),
+    ("mse", lambda x: ((x - 1.0) ** 2).mean()),
 ]
 
 
 @pytest.mark.parametrize("kernel_name", list(KERNEL_REGISTRY.keys()))
 @pytest.mark.parametrize("shape", SHAPES, ids=[str(s) for s in SHAPES])
-@pytest.mark.parametrize("loss_name,loss_fn", LOSS_FUNCTIONS, ids=["sum", "mean", "l2"])
+@pytest.mark.parametrize("loss_name,loss_fn", LOSS_FUNCTIONS, ids=["sum", "mean", "l2", "mse"])
 @pytest.mark.parametrize("seed", [42, 123, 456], ids=["42", "123", "456"])
 class TestKernelParity:
     """Parity tests between CUDA kernels and PyTorch autograd."""
@@ -57,7 +61,7 @@ class TestKernelParity:
         torch.testing.assert_close(
             cuda_out,
             ref_out,
-            msg=f"{kernel_name} forward mismatch at shape {shape} (abs_diff: {(cuda_out - ref_out).mean().item()}, rel_diff: {(cuda_out - ref_out).abs().mean() / ref_out.abs().mean()})",
+            msg=f"{kernel_name} forward mismatch at {'ODD' if odd_shape(shape) else 'EVEN'} shape {shape} (abs_diff: {(cuda_out - ref_out).mean().item()}, rel_diff: {(cuda_out - ref_out).abs().mean() / ref_out.abs().mean()})",
         )
 
     def test_backward_parity(
@@ -92,5 +96,5 @@ class TestKernelParity:
                 ref_grads[key],
                 atol=1e-4,
                 rtol=1e-4,
-                msg=f"{kernel_name} backward grad[{key}] mismatch at shape {shape} with {loss_name} loss (abs_diff: {(cuda_grads[key] - ref_grads[key]).mean().item()}, rel_diff: {(cuda_grads[key] - ref_grads[key]).abs().mean() / ref_grads[key].abs().mean()})",
+                msg=f"{kernel_name} backward grad[{key}] mismatch at {'ODD' if odd_shape(shape) else 'EVEN'} shape {shape} with {loss_name} loss (abs_diff: {(cuda_grads[key] - ref_grads[key]).mean().item()}, rel_diff: {(cuda_grads[key] - ref_grads[key]).abs().mean() / ref_grads[key].abs().mean()})",
             )
