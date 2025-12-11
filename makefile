@@ -3,8 +3,24 @@
 test:
 	rm -rf build/
 	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
-		bash -c "unset CC CXX && pip install . --no-build-isolation --no-deps && pytest tests/ -v"
+		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v"
 
-install:
+test-forward:
 	rm -rf build/
-	uv sync --all-extras
+	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
+		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v -k forward"
+
+test-backward:
+	rm -rf build/
+	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
+		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v -k backward"
+
+test-sss:
+	rm -rf build/
+	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
+		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v --kernel sss"
+
+test-xsss:
+	rm -rf build/
+	srun --account=large-sc-2 --container-writable --environment=kernel_fusion_pytorch_container -p debug \
+		bash -c "pip install . --no-build-isolation --no-deps && pytest tests/ -v --kernel xsss"
