@@ -44,6 +44,10 @@ add_library(cusss SHARED
     # SSSGLU Kernel
     "ops/sssglu.cpp"
     "cuda/sssglu_cuda.cu"
+    # xSSSLU Kernel
+    "ops/xssslu.cpp"
+    "cuda/xssslu_cuda.cu"
+
 
     # @TODO: Add other SSS variants here
 )
