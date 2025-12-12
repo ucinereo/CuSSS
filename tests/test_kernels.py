@@ -3,12 +3,12 @@ Unified parameterized tests for all CUDA kernels.
 
 Usage:
     pytest tests/test_kernels.py                    # Run all kernel tests
-    pytest tests/test_kernels.py --kernel sss       # Run only SSS tests
-    pytest tests/test_kernels.py --kernel xsss      # Run only xSSS tests
+    pytest tests/test_kernels.py --kernel sss       # Run only sss tests {sss, xsss, sssglu}
+    pytest tests/test_kernels.py --kernel xsss      # Run only xsss tests {sss, xsss, sssglu}
     pytest tests/test_kernels.py -k forward         # Run only forward tests
     pytest tests/test_kernels.py -k backward        # Run only backward tests
-    pytest tests/test_kernels.py --loss l2          # Run only one loss {sum, mean, l2, mse}
-    pytest tests/test_kernels.py --shape odd        # Run only tests odd or even shaped inputs {odd, even}
+    pytest tests/test_kernels.py --loss l2          # Run only l2 loss {sum, mean, l2, mse}
+    pytest tests/test_kernels.py --shape odd        # Run only odd shaped inputs {odd, even}
 """
 
 import pytest
@@ -49,8 +49,7 @@ class TestKernelParity:
         spec = get_kernel(kernel_name)
         torch.manual_seed(seed)
 
-        inputs = spec.input_generator(device)
-        inputs["x"] = torch.randn(*shape, device=device, requires_grad=True)
+        inputs = spec.input_generator(shape, device)
 
         model = spec.cuda_module().to(device)
         cuda_out = model(**inputs)
@@ -72,8 +71,7 @@ class TestKernelParity:
         torch.manual_seed(seed)
 
         # Generate input
-        inputs = spec.input_generator(device)
-        inputs["x"] = torch.randn(*shape, device=device)
+        inputs = spec.input_generator(shape, device)
 
         cuda_inputs = {
             k: v.detach().clone().requires_grad_(True) for k, v in inputs.items()
