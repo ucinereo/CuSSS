@@ -3,8 +3,8 @@ Unified parameterized tests for all CUDA kernels.
 
 Usage:
     pytest tests/test_kernels.py                    # Run all kernel tests
-    pytest tests/test_kernels.py --kernel sss       # Run only sss tests {sss, xsss, sssglu}
-    pytest tests/test_kernels.py --kernel xsss      # Run only xsss tests {sss, xsss, sssglu}
+    pytest tests/test_kernels.py --kernel sss       # Run only sss tests {sss, xsss, sssglu, ssslu, xssslu}
+    pytest tests/test_kernels.py --kernel xsss      # Run only xsss tests {sss, xsss, sssglu, ssslu, xssslu}
     pytest tests/test_kernels.py -k forward         # Run only forward tests
     pytest tests/test_kernels.py -k backward        # Run only backward tests
     pytest tests/test_kernels.py --loss l2          # Run only l2 loss {sum, mean, l2, mse}
