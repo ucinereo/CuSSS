@@ -8,128 +8,6 @@
 #include <iostream>
 
 // ===================================================================
-// Default: conversion to float
-template <typename T> struct sss_elementwise_op {
-  __device__ static T forward(T x) {
-    float x_f = static_cast<float>(x);
-    float inv = __frcp_rn(1.0f + fabsf(x_f));
-    float result = (x_f * inv) * 0.5f + 0.5f;
-    return static_cast<T>(result);
-  }
-  __device__ static T backward(T x, T grad_output) {
-    printf("[CUDA] x: %.15f, grad_out: %.15f\n", static_cast<float>(x), static_cast<float>(grad_output));
-    float x_f = static_cast<float>(x);
-    float grad_output_f = static_cast<float>(grad_output);
-    float inv = __frcp_rn(1.0f + fabsf(x_f));
-    float grad_input = grad_output_f * 0.5f * inv * inv;
-    // float denom = 1.0f + fabsf(x_f);
-    // float grad_input = (0.5f / (denom * denom)) * grad_output_f;
-    printf("[CUDA] grad_in: %.15f\n", grad_input);
-    return static_cast<T>(grad_input);
-  }
-};
-
-template <> struct sss_elementwise_op<float> {
-  __device__ static float forward(float x) {
-    float inv = __frcp_rn(1.0f + fabsf(x));
-    return (x * inv) * 0.5f + 0.5f;
-  }
-
-  __device__ static float backward(float x, float grad_output) {
-    float inv = __frcp_rn(1.0f + fabsf(x));
-    float grad_input = grad_output * 0.5f * inv * inv;
-    return grad_input;
-  }
-};
-
-// Could specialize for other types with their respective intrinsics
-
-// template <> struct sss_elementwise_op<c10::Half> {
-//   __device__ static c10::Half forward(c10::Half x) {
-//     c10::Half one_half(0.5f);
-//     c10::Half one(1.0f);
-//     c10::Half inv = hrcp(static_cast<__half>(one + abs(x)));
-//     return (x * inv) * one_half + one_half;
-//   }
-
-//     __device__ static c10::Half backward(c10::Half x,
-//                                          c10::Half grad_output) {
-//         c10::Half one_half(0.5f);
-//         c10::Half one(1.0f);
-//         c10::Half inv = hrcp(static_cast<__half>(one + abs(x)));
-//         c10::Half grad_input = grad_output * one_half * inv * inv;
-//         return grad_input;
-//     }
-// };
-
-// template <> struct sss_elementwise_op<double> {
-//   __device__ static double forward(double x) {
-//     double inv = __drcp_rn(1.0 + fabs(x));
-//     return (x * inv) * 0.5 + 0.5;
-//   }
-
-//   __device__ static double backward(double x, double grad_output) {
-//     double inv = __drcp_rn(1.0 + fabs(x));
-//     double grad_input = grad_output * 0.5 * inv * inv;
-//     return grad_input;
-//   }
-// };
-
-// template <> struct sss_elementwise_op<c10::BFloat16> {
-//   __device__ static c10::BFloat16 forward(c10::BFloat16 x) {
-//     c10::BFloat16 one_half(0.5f);
-//     c10::BFloat16 one(1.0f);
-//     c10::BFloat16 inv = hrcp(static_cast<__nv_bfloat16>(one + abs(x)));
-//     return (x * inv) * one_half + one_half;
-//   }
-
-//     __device__ static c10::BFloat16 backward(c10::BFloat16 x,
-//                                              c10::BFloat16 grad_output) {
-//         c10::BFloat16 one_half(0.5f);
-//         c10::BFloat16 one(1.0f);
-//         c10::BFloat16 inv = hrcp(static_cast<__nv_bfloat16>(one + abs(x)));
-//         c10::BFloat16 grad_input = grad_output * one_half * inv * inv;
-//         return grad_input;
-//     }
-// };
-
-// Specialized conversion of bfloat16/half to float seems to not be faster
-// template <> struct sss_elementwise_op<__nv_bfloat16> {
-//   __device__ static __nv_bfloat16 forward(__nv_bfloat16 x) {
-//     float x_f = __bfloat162float(x);
-//     float inv = __frcp_rn(1.0f + fabsf(x_f));
-//     float result = (x_f * inv) * 0.5f + 0.5f;
-//     return __float2bfloat16(result);
-//   }
-
-//   __device__ static __nv_bfloat16 backward(__nv_bfloat16 x,
-//                                            __nv_bfloat16 grad_output) {
-//     float x_f = __bfloat162float(x);
-//     float grad_output_f = __bfloat162float(grad_output);
-//     float inv = __frcp_rn(1.0f + fabsf(x_f));
-//     float grad_input = grad_output_f * 0.5f * inv * inv;
-//     return __float2bfloat16(grad_input);
-//   }
-// };
-
-// template <> struct sss_elementwise_op<__half> {
-//   __device__ static __half forward(__half x) {
-//     float x_f = __half2float(x);
-//     float inv = __frcp_rn(1.0f + fabsf(x_f));
-//     float result = (x_f * inv) * 0.5f + 0.5f;
-//     return __float2half(result);
-//   }
-
-//   __device__ static __half backward(__half x, __half grad_output) {
-//     float x_f = __half2float(x);
-//     float grad_output_f = __half2float(grad_output);
-//     float inv = __frcp_rn(1.0f + fabsf(x_f));
-//     float grad_input = grad_output_f * 0.5f * inv * inv;
-//     return __float2half(grad_input);
-//   }
-// };
-
-// ===================================================================
 // Helper for applying element-wise operations to vector types
 template <typename vec_t, typename native_t, int N> struct VectorApplyHelper;
 
@@ -146,6 +24,25 @@ struct VectorApplyHelper<vec_t, native_t, 4> {
     return {Op::backward(v.x, grad.x), Op::backward(v.y, grad.y),
             Op::backward(v.z, grad.z), Op::backward(v.w, grad.w)};
   }
+
+  // xsss variants with parameter a
+  template <typename Op>
+  __device__ static vec_t apply_xsss(const vec_t &v, native_t a) {
+    return {Op::forward(v.x, a), Op::forward(v.y, a), Op::forward(v.z, a),
+            Op::forward(v.w, a)};
+  }
+
+  template <typename Op>
+  __device__ static vec_t apply_backward_x(const vec_t &v, native_t a, const vec_t &grad) {
+    return {Op::backward_x(v.x, a, grad.x), Op::backward_x(v.y, a, grad.y),
+            Op::backward_x(v.z, a, grad.z), Op::backward_x(v.w, a, grad.w)};
+  }
+
+  template <typename Op>
+  __device__ static native_t apply_backward_a(const vec_t &v, const vec_t &grad) {
+    return Op::backward_a(v.x, grad.x) + Op::backward_a(v.y, grad.y) +
+           Op::backward_a(v.z, grad.z) + Op::backward_a(v.w, grad.w);
+  }
 };
 
 // Specialization for 2-element vectors (__half2, __nv_bfloat162)
@@ -159,8 +56,25 @@ struct VectorApplyHelper<vec_t, native_t, 2> {
   __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
     return {Op::backward(v.x, grad.x), Op::backward(v.y, grad.y)};
   }
+
+  // xsss variants with parameter a
+  template <typename Op>
+  __device__ static vec_t apply_xsss(const vec_t &v, native_t a) {
+    return {Op::forward(v.x, a), Op::forward(v.y, a)};
+  }
+
+  template <typename Op>
+  __device__ static vec_t apply_backward_x(const vec_t &v, native_t a, const vec_t &grad) {
+    return {Op::backward_x(v.x, a, grad.x), Op::backward_x(v.y, a, grad.y)};
+  }
+
+  template <typename Op>
+  __device__ static native_t apply_backward_a(const vec_t &v, const vec_t &grad) {
+    return Op::backward_a(v.x, grad.x) + Op::backward_a(v.y, grad.y);
+  }
 };
 
+// Specialization for scalar types
 template <typename vec_t, typename native_t>
 struct VectorApplyHelper<vec_t, native_t, 1> {
   template <typename Op> __device__ static vec_t apply(const vec_t &v) {
@@ -172,6 +86,23 @@ struct VectorApplyHelper<vec_t, native_t, 1> {
     return Op::backward(v, grad);
   }
 };
+
+// ===================================================================
+// Helper to convert scalar_t to native_t
+template <typename scalar_t, typename native_t>
+__device__ __forceinline__ native_t to_native(scalar_t val) {
+  return static_cast<native_t>(val);
+}
+
+template <>
+__device__ __forceinline__ __half to_native<c10::Half, __half>(c10::Half val) {
+  return static_cast<__half>(val);
+}
+
+template <>
+__device__ __forceinline__ __nv_bfloat16 to_native<c10::BFloat16, __nv_bfloat16>(c10::BFloat16 val) {
+  return static_cast<__nv_bfloat16>(val);
+}
 
 // ===================================================================
 // VectorIO Traits structs for double, float, half, bfloat16
@@ -197,6 +128,25 @@ struct VectorIOBase {
   __device__ static vec_t apply_backward(const vec_t &v, const vec_t &grad) {
     return VectorApplyHelper<vec_t, native_t,
                              packed_size>::template apply_backward<Op>(v, grad);
+  }
+
+  // xsss-specific methods
+  template <typename Op>
+  __device__ static vec_t apply_xsss(const vec_t &v, native_t a) {
+    return VectorApplyHelper<vec_t, native_t,
+                             packed_size>::template apply_xsss<Op>(v, a);
+  }
+
+  template <typename Op>
+  __device__ static vec_t apply_backward_x(const vec_t &v, native_t a, const vec_t &grad) {
+    return VectorApplyHelper<vec_t, native_t,
+                             packed_size>::template apply_backward_x<Op>(v, a, grad);
+  }
+
+  template <typename Op>
+  __device__ static native_t apply_backward_a(const vec_t &v, const vec_t &grad) {
+    return VectorApplyHelper<vec_t, native_t,
+                             packed_size>::template apply_backward_a<Op>(v, grad);
   }
 };
 
