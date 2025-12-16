@@ -16,10 +16,11 @@ def _lib_path():
 torch.classes.load_library(_lib_path())
 
 # Import python wrapper
-from .glue import SSS, xSSS
+from .glue import SSS, xSSS, SSSGLU
 
 # Expose the main classes
 __all__ = [
     "SSS",
     "xSSS",
+    "SSSGLU",
 ]

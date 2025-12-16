@@ -79,8 +79,9 @@ def compare_and_print_results(results, baseline_key, func_type):
 def benchmark_on_cuda(
     modules: dict[str, torch.nn.Module],
     baseline: tuple[str, torch.nn.Module],
-    tensor_sizes: list[int] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
-    mode: str = "SSS"
+    mode: str,
+    out_filename: str,
+    tensor_sizes: list[int] = [10_752, 21_504, 43_008], # 2nd and 3rd correspond to Apertus 8B, 70B
 ):
     """
     Generic benchmark function which takes some modules (here for the activation functions) and records the time
@@ -90,8 +91,8 @@ def benchmark_on_cuda(
     device = torch.device("cuda")
 
     WARMUP_PASSES = 100
-    MEASUREMENTS = 10
-    PASSES_PER_MEASUREMENT = 100
+    MEASUREMENTS = 100
+    PASSES_PER_MEASUREMENT = 10
 
     baseline_name, baseline_module = baseline
     baseline_name = f"{baseline_name} [Baseline]"
@@ -101,11 +102,17 @@ def benchmark_on_cuda(
 
     # Iterate over tensor sizes
     for size in tensor_sizes:
-        batch_size = 64
-        x = torch.randn(batch_size, size, device=device, requires_grad=True)
+        size = (1, 4096, size)
+
+        x = torch.randn(size, device=device, requires_grad=True)
+        x2 = torch.randn(size, device=device, requires_grad=True)
+
+        target = torch.randn(size, device=device, requires_grad=True)
         a = torch.randn(1, device=device, requires_grad=True) # for xSSS
 
-        title = f"| Tensor size ({batch_size}, {size:_}) |"
+        num_giga_bytes = x.nbytes / 1_000_000_000
+
+        title = f"| Tensor size {size} |"
         print("-" * len(title))
         print(title)
         print("-" * len(title))
@@ -124,6 +131,8 @@ def benchmark_on_cuda(
                     y = activ_fn(x)
                 elif mode == "xSSS":
                     y = activ_fn(x, a)
+                elif mode == "SSSGLU":
+                    y = activ_fn(x, x2)
 
             forward_passes_times = []
 
@@ -139,14 +148,19 @@ def benchmark_on_cuda(
                         y = activ_fn(x)
                     elif mode == "xSSS":
                         y = activ_fn(x, a)
+                    elif mode == "SSSGLU":
+                        y = activ_fn(x, x2)
                 end.record()
                 torch.cuda.synchronize()
-                forward_passes_times.append(start.elapsed_time(end))
+                time_per_gigabyte = start.elapsed_time(end) / (num_giga_bytes * PASSES_PER_MEASUREMENT)
+                forward_passes_times.append(time_per_gigabyte)
 
             all_forward_results[module_name] = forward_passes_times
 
             # # Backward pass:
-            loss = y.sum()
+            loss_fn = torch.nn.MSELoss()
+            loss_fn2 = torch.nn.L1Loss()
+            loss = loss_fn(y, target) + loss_fn2(y, target)
 
             # Warm-up
             for _ in range(WARMUP_PASSES):
@@ -165,7 +179,8 @@ def benchmark_on_cuda(
                     loss.backward(retain_graph=True)
                 end.record()
                 torch.cuda.synchronize()
-                backward_passes_times.append(start.elapsed_time(end))
+                time_per_gigabyte = start.elapsed_time(end) / (num_giga_bytes * PASSES_PER_MEASUREMENT)
+                backward_passes_times.append(time_per_gigabyte)
 
             all_backward_results[module_name] = backward_passes_times
 
@@ -184,7 +199,7 @@ def benchmark_on_cuda(
         # Compute combined timings (element-wise sum of forward + backward measurements)
         combined_timings = {}
         # Only combine modules that have both forward and backward measurements
-        for name in set(all_forward_results.keys()) & set(all_backward_results.keys()):
+        for name in all_forward_results.keys():
             f_times = all_forward_results[name]
             b_times = all_backward_results[name]
             # Align lengths (use min length) and sum element-wise
@@ -213,14 +228,14 @@ def benchmark_on_cuda(
         else:
             combined_stats = {}
 
-        json_data[size] = {
+        json_data[x.nbytes] = {
             "forward": forward_stats,
             "backward": backward_stats,
             "combined": combined_stats,
         }
 
     # If requested, save a JSON with raw timings and computed stats for this tensor size
-    out_path = Path("benchmarks/results/pytorch.json")
+    out_path = Path(f"benchmarks/results/pytorch_jsons/{out_filename}.json")
 
     # write back
     out_path.parent.mkdir(parents=True, exist_ok=True)
