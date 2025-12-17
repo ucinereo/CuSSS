@@ -98,7 +98,7 @@ at::Tensor sss_forward_cuda(const at::Tensor& x) {
     auto output = torch::empty_like(x_contig);
     int size = x_contig.numel();
 
-    int blockSize = 1024;
+    int blockSize = 128;
     // Round up to ensure tail is covered
     int num_vectors = (size + 3) / 4;
     int numBlocks = (num_vectors + blockSize - 1) / blockSize;
@@ -128,7 +128,7 @@ at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output)
     auto grad_x = torch::empty_like(y_contig);
     int size = y_contig.numel();
 
-    int blockSize = 1024;
+    int blockSize = 128;
     // Round up to ensure tail is covered
     int num_vectors = (size + 3) / 4;
     int numBlocks = (num_vectors + blockSize - 1) / blockSize;
