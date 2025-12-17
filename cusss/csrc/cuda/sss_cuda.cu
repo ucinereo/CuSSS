@@ -33,17 +33,6 @@ __global__ void sss_forward_kernel(const float* __restrict__ x, float* __restric
 
         reinterpret_cast<float4*>(output)[i4] = out;
     }
-    // Tail Path
-    else if (base < size) {
-        // Handle remaining 1, 2, or 3 elements
-        for (int k = 0; k < 4; ++k) {
-            int idx = base + k;
-            if (idx < size) {
-                float val = x[idx];
-                output[idx] = (val * __frcp_rn(1.0f + fabsf(val))) * 0.5f + 0.5f;
-            }
-        }
-    }
 }
 
 __global__ void sss_backward_kernel(const float* __restrict__ y, const float* __restrict__ grad_out, float* __restrict__ grad_x, int size) {
@@ -70,19 +59,6 @@ __global__ void sss_backward_kernel(const float* __restrict__ y, const float* __
         out.w = g.w * (0.5f * t3 * t3);
 
         reinterpret_cast<float4*>(grad_x)[i4] = out;
-    }
-    // Tail Path
-    else if (base < size) {
-        for (int k = 0; k < 4; ++k) {
-            int idx = base + k;
-            if (idx < size) {
-                float val = y[idx];
-                float g_val = grad_out[idx];
-
-                float t = 1.0f - fabsf(2.0f * val - 1.0f);
-                grad_x[idx] = g_val * (0.5f * t * t);
-            }
-        }
     }
 }
 
