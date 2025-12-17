@@ -1,3 +1,4 @@
+import torch
 def odd_shape(shape): # defined as when all dimension is not power of 2 and greater than 1
     return all(dim % 4 != 0 and dim > 1 for dim in shape)
 
@@ -19,6 +20,12 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Run tests only for specified loss function {sum, mean, l2, mse}",
+    )
+    parser.addoption(
+        "--dtype",
+        action="store",
+        default=None,
+        help="Run tests only for specified dtype {float32, bfloat16}",
     )
 
 
@@ -62,5 +69,16 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if hasattr(item, "callspec") and "loss_name" in item.callspec.params:
                 if item.callspec.params["loss_name"] == loss_filter:
+                    remaining.append(item)
+        items[:] = remaining
+
+    dtype_filter = config.getoption("--dtype")
+    if dtype_filter:
+        remaining = []
+        for item in items:
+            if hasattr(item, "callspec") and "dtype" in item.callspec.params:
+                dtype = item.callspec.params["dtype"]
+                dtype_str = "float32" if dtype == torch.float32 else "bfloat16" if dtype == torch.bfloat16 else str(dtype)
+                if dtype_str == dtype_filter:
                     remaining.append(item)
         items[:] = remaining

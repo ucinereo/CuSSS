@@ -7,6 +7,12 @@
 #include <torch/script.h>
 #include <iostream>
 
+#define SSS_DTYPE_CHECK(tensor, name)                                      \
+  TORCH_CHECK(tensor.dtype() == torch::kFloat ||                           \
+              tensor.dtype() == torch::kBFloat16 ||                        \
+              tensor.dtype() == torch::kFloat8_e5m2,                       \
+              name " must be float, bfloat16, or float8 (e5m2)")
+
 // ===================================================================
 // Helper for applying element-wise operations to vector types
 template <typename vec_t, typename native_t, int N> struct VectorApplyHelper;

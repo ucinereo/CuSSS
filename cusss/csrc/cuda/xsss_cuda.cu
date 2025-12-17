@@ -12,10 +12,6 @@ using torch::Tensor;
 using torch::TensorOptions;
 using torch::autograd::tensor_list;
 
-#define XSSS_DTYPE_CHECK(tensor, name) \
-    TORCH_CHECK(tensor.dtype() == torch::kFloat || tensor.dtype() == torch::kBFloat16 || tensor.dtype() == torch::kFloat8_e5m2, \
-        name " must be float or bfloat16!")
-
 // ===================================================================
 // Templated element-wise operations
 
@@ -114,7 +110,6 @@ __global__ void xsss_backward_kernel(const scalar_t* x, const scalar_t* a, const
         vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
         vec_t g = reinterpret_cast<const vec_t*>(grad_out)[i_vec];
         native_t a_val = to_native<scalar_t, native_t>(a[0]);
-        native_t* grad_a_native = reinterpret_cast<native_t*>(grad_a);
         // apply backward operation for x
         vec_t grad_x_vec = Traits::template apply_backward_x<xsss_elementwise_op<native_t>>(v, a_val, g);
 
@@ -122,7 +117,7 @@ __global__ void xsss_backward_kernel(const scalar_t* x, const scalar_t* a, const
         reinterpret_cast<vec_t*>(grad_x)[i_vec] = grad_x_vec;
 
         // accumulate gradient for a
-        local_a = Traits::template apply_backward_a<xsss_elementwise_op<native_t>>(v, g);
+        local_a = static_cast<float>(Traits::template apply_backward_a<xsss_elementwise_op<native_t>>(v, g));
     }
     // write local contribution into shared memory for reduction
     sdata[threadIdx.x] = local_a;
@@ -138,7 +133,8 @@ __global__ void xsss_backward_kernel(const scalar_t* x, const scalar_t* a, const
 
     // thread 0 performs a single atomic add to global grad_a
     if (threadIdx.x == 0) {
-      atomicAdd(grad_a, sdata[0]);
+      native_t* grad_a_ptr = reinterpret_cast<native_t*>(grad_a);
+      atomicAdd(grad_a_ptr, static_cast<native_t>(sdata[0]));
     }
 }
 
@@ -147,10 +143,10 @@ __global__ void xsss_backward_kernel(const scalar_t* x, const scalar_t* a, const
 
 at::Tensor xsss_forward_cuda(const at::Tensor& x_in, const at::Tensor& a_in) {
     auto x = fp8_to_float(x_in);
-    XSSS_DTYPE_CHECK(x, "Input 'x' tensor");
+    SSS_DTYPE_CHECK(x, "Input 'x' tensor");
     TORCH_CHECK(x.is_cuda(), "Input 'x' tensor must be a CUDA tensor!");
     auto a = fp8_to_float(a_in);
-    XSSS_DTYPE_CHECK(a, "Input 'a' tensor");
+    SSS_DTYPE_CHECK(a, "Input 'a' tensor");
     TORCH_CHECK(a.is_cuda(), "Input 'a' tensor must be a CUDA tensor!");
     TORCH_CHECK(a.numel() == 1, "Input a must be a scalar tensor!");
 
@@ -178,14 +174,14 @@ at::Tensor xsss_forward_cuda(const at::Tensor& x_in, const at::Tensor& a_in) {
 
 tensor_list xsss_backward_cuda(const at::Tensor& x_in, const at::Tensor& a_in, const at::Tensor& grad_output_in) {
     auto x = fp8_to_float(x_in);
-    XSSS_DTYPE_CHECK(x, "Input 'x' tensor");
+    SSS_DTYPE_CHECK(x, "Input 'x' tensor");
     TORCH_CHECK(x.is_cuda(), "Input 'x' tensor must be a CUDA tensor!");
     auto a = fp8_to_float(a_in);
-    XSSS_DTYPE_CHECK(a, "Input 'a' tensor");
+    SSS_DTYPE_CHECK(a, "Input 'a' tensor");
     TORCH_CHECK(a.is_cuda(), "Input 'a' tensor must be a CUDA tensor!");
     TORCH_CHECK(a.numel() == 1, "Input a must be a scalar tensor!");
     auto grad_output = fp8_to_float(grad_output_in);
-    XSSS_DTYPE_CHECK(grad_output, "Grad tensor");
+    SSS_DTYPE_CHECK(grad_output, "Grad tensor");
     TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
     TORCH_CHECK(x.numel() == grad_output.numel(), "Grad tensor must match x tensor size!");
 
@@ -198,15 +194,21 @@ tensor_list xsss_backward_cuda(const at::Tensor& x_in, const at::Tensor& a_in, c
     int vec_size = get_vector_size(x.scalar_type());
     int num_vec = size / vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
+    size_t shared_mem_size = blockSize * sizeof(float);
 
-    xsss_backward_kernel<<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(),
-        a.data_ptr<float>(),
-        grad_output_contig.data_ptr<float>(),
-        grad_x.data_ptr<float>(),
-        grad_a.data_ptr<float>(),
-        size
-    );
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::kHalf, at::kBFloat16, x.scalar_type(), "xsss_backward_cuda", [&] {
+        xsss_backward_kernel<scalar_t><<<numBlocks, blockSize, shared_mem_size>>>(
+            x.data_ptr<scalar_t>(),
+            a.data_ptr<scalar_t>(),
+            grad_output_contig.data_ptr<scalar_t>(),
+            grad_x.data_ptr<scalar_t>(),
+            grad_a.data_ptr<scalar_t>(),
+            size
+        );
+        });
 
+    grad_x = float_to_fp8(grad_x, x_in.scalar_type());
+    grad_a = float_to_fp8(grad_a, a_in.scalar_type());
     return {grad_x, grad_a};
 }

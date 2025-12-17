@@ -10,10 +10,6 @@ using namespace torch::autograd;
 using torch::Tensor;
 using torch::TensorOptions;
 
-#define SSS_DTYPE_CHECK(tensor, name) \
-    TORCH_CHECK(tensor.dtype() == torch::kFloat || tensor.dtype() == torch::kBFloat16 || tensor.dtype() == torch::kFloat8_e5m2, \
-        name " must be float or bfloat16!")
-
 // ===================================================================
 // Templated element-wise operations
 
