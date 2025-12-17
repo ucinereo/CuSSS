@@ -4,6 +4,7 @@ import triton.testing
 
 import cusss
 import cusss.triton as tcusss
+from sss_triton_no_autograd import sss_triton_forward, sss_triton_backward
 
 
 @triton.testing.perf_report(
@@ -11,9 +12,14 @@ import cusss.triton as tcusss
         x_names=["N"],
         x_vals=[128 * 1024 * i for i in range(2, 100, 10)],
         line_arg="provider",
-        line_vals=["torch-sigmoid", "cuda-sss", "triton-sss"],
-        line_names=["PyTorch Sigmoid", "Custom CUDA", "Triton SSS"],
-        styles=[("blue", "-"), ("green", "-"), ("red", "-")],
+        line_vals=["torch-sigmoid", "cuda-sss", "triton-sss", "triton-sss-direct"],
+        line_names=[
+            "PyTorch Sigmoid",
+            "Custom CUDA",
+            "Triton SSS",
+            "Triton SSS Direct",
+        ],
+        styles=[("blue", "-"), ("green", "-"), ("red", "-"), ("purple", "-")],
         ylabel="GB/s",
         plot_name="sss-checkpointing-performance",
         args={},
@@ -42,6 +48,12 @@ def benchmark(N, provider):
         y.backward(grad_out)
         x.grad = None
 
+    def run_triton_direct():
+        _ = sss_triton_forward(x)
+        y = sss_triton_forward(x)
+        _ = sss_triton_backward(y, grad_out)
+        x.grad = None
+
     quantiles = [0.5, 0.2, 0.8]
     if provider == "torch-sigmoid":
         func = run_torch
@@ -49,6 +61,8 @@ def benchmark(N, provider):
         func = run_cuda
     elif provider == "triton-sss":
         func = run_triton
+    elif provider == "triton-sss-direct":
+        func = run_triton_direct
 
     ms, min_ms, max_ms = triton.testing.do_bench(func, quantiles=quantiles)
 
