@@ -11,7 +11,7 @@ Benchmark our SSSLU and xSSSLU implementations against the PyTorch Sigmoid-modul
 if __name__ == "__main__":
 
     @jit_fuser
-    def ssslu(x, a):
+    def ssslu(x):
         return x * (0.5 * torch.nn.functional.softsign(x) + 0.5)
 
     @jit_fuser
@@ -23,8 +23,8 @@ if __name__ == "__main__":
         def __init__(self, config=None):
             super().__init__(config=config)
 
-        def forward(self, x, a):
-            return ssslu(x, a)
+        def forward(self, x):
+            return ssslu(x)
         
     class xSSSLUMegatron(MegatronModule):
         def __init__(self, config=None):
@@ -32,30 +32,19 @@ if __name__ == "__main__":
 
         def forward(self, x, a):
             return xssslu(x, a)
-        
-    class ReLU(torch.nn.Module):
-        """Baseline: ReLU"""
-        def forward(self, x, a):
-            return torch.relu(x)
     
-    class GELU(torch.nn.Module):
-        """Baseline: GELU"""
-        def forward(self, x, a):
-            return torch.nn.functional.gelu(x)
-        
     class SiLU(torch.nn.Module):
         """Baseline: SiLU"""
         def forward(self, x, a):
             return torch.nn.functional.silu(x)
-    
+
     ssslu_megatron = SSSLUMegatron()
     xssslu_megatron = xSSSLUMegatron()
     ssslu_cuda = SSSLU()
     xssslu_cuda = xSSSLU()
-    relu = ReLU()
-    gelu = GELU()
-    silu = SiLU()
+    relu = torch.nn.ReLU()  
+    silu = SiLU()  
     
     
-
-    benchmark_on_cuda(modules={"xSSSLU Megatron": ssslu_megatron, "xSSSLU Cuda": ssslu_cuda, "xSSSLU Megatron": xssslu_megatron, "xSSSLU Cuda": xssslu_cuda, "ReLU": relu, "GELU": gelu, "SiLU": silu}, baseline=("xSSSLU Megatron", xssslu_megatron), mode="xSSS", out_filename="ssslu_xssslu")
+    benchmark_on_cuda(modules={"SSSLU Megatron": ssslu_megatron, "SSSLU Cuda": ssslu_cuda, "SiLU PyTorch": torch.nn.SiLU()}, baseline=("ReLU PyTorch", relu), mode="SSS", out_filename="ssslu_relu")
+    benchmark_on_cuda(modules={"xSSSLU Megatron": xssslu_megatron, "xSSSLU Cuda": xssslu_cuda, }, baseline=("SiLU PyTorch", silu), mode="xSSS", out_filename="xssslu_silu")
