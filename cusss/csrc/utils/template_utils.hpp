@@ -38,6 +38,13 @@ struct VectorApplyHelper<vec_t, native_t, 4> {
             Op::forward(v.w, a)};
   }
 
+  // xssslu variants with parameter a
+  template <typename Op>
+  __device__ static vec_t apply_xssslu(const vec_t &v, native_t a) {
+    return {Op::forward(v.x, a), Op::forward(v.y, a), Op::forward(v.z, a),
+            Op::forward(v.w, a)};
+  }
+
   template <typename Op>
   __device__ static vec_t apply_backward_x(const vec_t &v, native_t a, const vec_t &grad) {
     return {Op::backward_x(v.x, a, grad.x), Op::backward_x(v.y, a, grad.y),
@@ -66,6 +73,12 @@ struct VectorApplyHelper<vec_t, native_t, 2> {
   // xsss variants with parameter a
   template <typename Op>
   __device__ static vec_t apply_xsss(const vec_t &v, native_t a) {
+    return {Op::forward(v.x, a), Op::forward(v.y, a)};
+  }
+
+  /// xssslu variants with parameter a
+  template <typename Op>
+  __device__ static vec_t apply_xssslu(const vec_t &v, native_t a) {
     return {Op::forward(v.x, a), Op::forward(v.y, a)};
   }
 
@@ -141,6 +154,13 @@ struct VectorIOBase {
   __device__ static vec_t apply_xsss(const vec_t &v, native_t a) {
     return VectorApplyHelper<vec_t, native_t,
                              packed_size>::template apply_xsss<Op>(v, a);
+  }
+
+  /// xssslu-specific methods
+  template <typename Op>
+  __device__ static vec_t apply_xssslu(const vec_t &v, native_t a) {
+    return VectorApplyHelper<vec_t, native_t,
+                             packed_size>::template apply_xssslu<Op>(v, a);
   }
 
   template <typename Op>
