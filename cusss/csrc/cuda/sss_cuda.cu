@@ -22,11 +22,11 @@ template <typename T> struct sss_elementwise_op {
     float result = (x_f * inv) * 0.5f + 0.5f;
     return static_cast<T>(result);
   }
-  __device__ static T backward(T x, T grad_output) {
-    float x_f = static_cast<float>(x);
+  __device__ static T backward(T y, T grad_output) {
+    float y_f = static_cast<float>(y);
     float grad_output_f = static_cast<float>(grad_output);
-    float inv = __frcp_rn(1.0f + fabsf(x_f));
-    float grad_input = grad_output_f * 0.5f * inv * inv;
+    float temp = 1.0f - fabsf(2.0f * y_f - 1.0f);
+    float grad_input = grad_output_f * 0.5f * temp * temp;
     return static_cast<T>(grad_input);
   }
 };
@@ -37,9 +37,10 @@ template <> struct sss_elementwise_op<float> {
     return (x * inv) * 0.5f + 0.5f;
   }
 
-  __device__ static float backward(float x, float grad_output) {
-    float inv = __frcp_rn(1.0f + fabsf(x));
-    float grad_input = grad_output * 0.5f * inv * inv;
+  __device__ static float backward(float y, float grad_output) {
+    float inv = __frcp_rn(1.0f + fabsf(y));
+    float temp = 1.0f - fabsf(2.0f * y - 1.0f);
+    float grad_input = grad_output * 0.5f * temp * temp;
     return grad_input;
   }
 };
@@ -48,7 +49,7 @@ template <> struct sss_elementwise_op<float> {
 // CUDA Kernels
 
 template <typename scalar_t>
-__global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size) {
+__global__ void sss_forward_kernel(const scalar_t* __restrict__ x, scalar_t* __restrict__ output, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     using Traits = VectorIO<scalar_t>;
@@ -72,7 +73,7 @@ __global__ void sss_forward_kernel(const scalar_t* x, scalar_t* output, int size
 }
 
 template <typename scalar_t>
-__global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out, scalar_t* grad_x, int size) {
+__global__ void sss_backward_kernel(const scalar_t* __restrict__ y, const scalar_t* __restrict__ grad_out, scalar_t* __restrict__ grad_x, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     using Traits = VectorIO<scalar_t>;
@@ -85,7 +86,7 @@ __global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out,
 
     if (base + vec_size - 1 < size) {
         // vectorized load
-        vec_t v = reinterpret_cast<const vec_t*>(x)[i_vec];
+        vec_t v = reinterpret_cast<const vec_t*>(y)[i_vec];
         vec_t g = reinterpret_cast<const vec_t*>(grad_out)[i_vec];
 
         // apply backward operation
@@ -126,36 +127,35 @@ at::Tensor sss_forward_cuda(const at::Tensor& x) {
     return output;
 }
 
-at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output_in) {
-    auto x_ = fp8_to_float(x);
-    SSS_DTYPE_CHECK(x_, "Input tensor");  
-    TORCH_CHECK(x_.is_cuda(), "Input tensor must be a CUDA tensor!");
+at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output_in) {
+    auto y_ = fp8_to_float(y);
+    SSS_DTYPE_CHECK(y_, "Input tensor");  
+    TORCH_CHECK(y_.is_cuda(), "Input tensor must be a CUDA tensor!");
     auto grad_output = fp8_to_float(grad_output_in);
     SSS_DTYPE_CHECK(grad_output, "Grad tensor");
     TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
-    TORCH_CHECK(x.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
-
+    TORCH_CHECK(y_.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
     // Ensure contiguity for float4 alignment
-    auto x_contig = x_.contiguous();
+    auto y_contig = y_.contiguous();
     auto grad_output_contig = grad_output.contiguous();
 
-    // Create output buffer matching the contiguous x
-    auto grad_x = torch::empty_like(x_contig);
-    int size = x_contig.numel();
+    // Create output buffer matching the contiguous y
+    auto grad_x = torch::empty_like(y_contig);
+    int size = y_.numel();
 
     int blockSize = 128;
-    int vec_size = get_vector_size(x_.scalar_type());
+    int vec_size = get_vector_size(y_.scalar_type());
     int num_vec = (size + vec_size - 1) / vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    AT_DISPATCH_FLOATING_TYPES_AND(at::kBFloat16, x_.scalar_type(), "sss_backward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND(at::kBFloat16, y_.scalar_type(), "sss_backward_cuda", [&] {
         sss_backward_kernel<scalar_t><<<numBlocks, blockSize>>>(
-            x_.data_ptr<scalar_t>(),
+            y_contig.data_ptr<scalar_t>(),
             grad_output_contig.data_ptr<scalar_t>(),
             grad_x.data_ptr<scalar_t>(),
             size
         );
       });
-    grad_x = float_to_fp8(grad_x, x_.scalar_type());
+    grad_x = float_to_fp8(grad_x, y_.scalar_type());
     return grad_x;
 }

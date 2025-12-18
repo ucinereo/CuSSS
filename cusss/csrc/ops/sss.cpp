@@ -42,7 +42,7 @@ struct SSSFunction : public Function<SSSFunction> {
     static tensor_list backward(AutogradContext *ctx, tensor_list grad_outputs) {
         // Retrieve the saved tensors
         auto saved = ctx->get_saved_variables();
-        auto x = saved[0];
+        auto y = saved[0];
         auto gy = grad_outputs[0];
 
         // Again, we need to request the dispatcher for the correct implementation.
@@ -50,7 +50,7 @@ struct SSSFunction : public Function<SSSFunction> {
             .findSchemaOrThrow("sss::backward", "")
             .typed<decltype(sss_backward_cuda)>();
 
-        return {op.call(x, gy)};
+        return {op.call(y, gy)};
     }
 };
 
@@ -66,7 +66,7 @@ at::Tensor sss_forward_autograd(const at::Tensor& x) {
 // This is what users will call.
 TORCH_LIBRARY(sss, m) {
     m.def("forward(Tensor x) -> Tensor");
-    m.def("backward(Tensor x, Tensor grad_out) -> Tensor");
+    m.def("backward(Tensor y, Tensor grad_out) -> Tensor");
 }
 
 // CUDA implementation (found via dispatcher if input is on CUDA)
