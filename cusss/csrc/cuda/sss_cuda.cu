@@ -3,6 +3,8 @@
 #include <cuda.h>
 #include <cuda_bf16.h>
 #include <torch/script.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <cuda_runtime.h>
 
 using namespace torch::indexing;
 using namespace torch::autograd;
@@ -98,58 +100,62 @@ __global__ void sss_backward_kernel(const scalar_t* x, const scalar_t* grad_out,
 // ===================================================================
 // Kernel Launchers
 
-at::Tensor sss_forward_cuda(const at::Tensor& x_in) {
-    auto x = fp8_to_float(x_in);
-    SSS_DTYPE_CHECK(x, "Input tensor");
-    TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
+at::Tensor sss_forward_cuda(const at::Tensor& x) {
+    auto x_ = fp8_to_float(x);
+    SSS_DTYPE_CHECK(x_, "Input tensor");
+    TORCH_CHECK(x_.is_cuda(), "Input tensor must be a CUDA tensor!");
 
     // x = x.contiguous();
-    auto output = torch::empty_like(x).contiguous();
-    int size = x.numel();
+    auto output = torch::empty_like(x_).contiguous();
+    int size = x_.numel();
 
     // @TODO: Better kernel launch configuration
     int blockSize = 256;
-    int vec_size = get_vector_size(x.scalar_type());
+    int vec_size = get_vector_size(x_.scalar_type());
     int num_vec = size / vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
     AT_DISPATCH_FLOATING_TYPES_AND(
-        at::kBFloat16, x.scalar_type(), "sss_forward_cuda", [&] {
+        at::kBFloat16, x_.scalar_type(), "sss_forward_cuda", [&] {
         sss_forward_kernel<scalar_t><<<numBlocks, blockSize>>>(
-            x.data_ptr<scalar_t>(),
+            x_.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
             size);
         });
-    output = float_to_fp8(output, x.scalar_type());
+    output = float_to_fp8(output, x_.scalar_type());
     return output;
 }
 
-at::Tensor sss_backward_cuda(const at::Tensor& x_in, const at::Tensor& grad_output_in) {
-    auto x = fp8_to_float(x_in);
-    SSS_DTYPE_CHECK(x, "Input tensor");  
-    TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
+at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output_in) {
+    auto x_ = fp8_to_float(x);
+    SSS_DTYPE_CHECK(x_, "Input tensor");  
+    TORCH_CHECK(x_.is_cuda(), "Input tensor must be a CUDA tensor!");
     auto grad_output = fp8_to_float(grad_output_in);
     SSS_DTYPE_CHECK(grad_output, "Grad tensor");
     TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
     TORCH_CHECK(x.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
 
-    auto grad_output_contig = grad_output.contiguous(); // Apparently since the loss output might be non-contiguous
-    auto grad_x = torch::empty_like(x).contiguous();
-    int size = x.numel();
+    // Ensure contiguity for float4 alignment
+    auto x_contig = x_.contiguous();
+    auto grad_output_contig = grad_output.contiguous();
+
+    // Create output buffer matching the contiguous x
+    auto grad_x = torch::empty_like(x_contig);
+    int size = x_contig.numel();
 
     int blockSize = 128;
-    int vec_size = get_vector_size(x.scalar_type());
-    int num_vec = size/vec_size;
+    int vec_size = get_vector_size(x_.scalar_type());
+    int num_vec = (size + vec_size - 1) / vec_size;
     int numBlocks = (num_vec + blockSize - 1) / blockSize;
 
-    AT_DISPATCH_FLOATING_TYPES_AND(at::kBFloat16, x.scalar_type(), "sss_backward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND(at::kBFloat16, x_.scalar_type(), "sss_backward_cuda", [&] {
         sss_backward_kernel<scalar_t><<<numBlocks, blockSize>>>(
-            x.data_ptr<scalar_t>(),
+            x_.data_ptr<scalar_t>(),
             grad_output_contig.data_ptr<scalar_t>(),
             grad_x.data_ptr<scalar_t>(),
             size
         );
       });
-    grad_x = float_to_fp8(grad_x, x.scalar_type());
+    grad_x = float_to_fp8(grad_x, x_.scalar_type());
     return grad_x;
 }

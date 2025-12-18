@@ -1,5 +1,5 @@
-#include "sss.hpp"
-#include "sss_cuda.hpp"
+#include "xssslu.hpp"
+#include "xssslu_cuda.hpp"
 
 #include <torch/extension.h>
 #include <torch/library.h>
@@ -11,9 +11,9 @@ using torch::autograd::tensor_list;
 using torch::Tensor;
 
 // To register a backward formula, we need to construct a custom autograd function
-struct SSSFunction : public Function<SSSFunction> {
+struct xSSSLUFunction : public Function<xSSSLUFunction> {
 
-    static at::Tensor forward(AutogradContext *ctx, const at::Tensor& x) {
+    static at::Tensor forward(AutogradContext *ctx, const at::Tensor& x, const at::Tensor& a) {
         // It is important that the forward looks like this.
         // If not, it can lead to the operator being silently not correct.
         // Source: https://docs.google.com/document/d/1_W62p8WJOQQUzPsJYa7s701JXt0qf2OfLub2sbkHOaU/edit?tab=t.0#bookmark=id.gcevr8cskv86
@@ -27,36 +27,35 @@ struct SSSFunction : public Function<SSSFunction> {
         // To allow for backend-specific implementations, we use the dispatcher to find the correct implementation.
         // This also enables the use of JIT compilation and other optimizations for torchscript.
         static auto op = torch::Dispatcher::singleton()
-            .findSchemaOrThrow("sss::forward", "")
-            .typed<decltype(sss_forward_cuda)>();
-
-        at::Tensor output = op.call(x);
-
+            .findSchemaOrThrow("xssslu::forward", "")
+            .typed<decltype(xssslu_forward_cuda)>();
+        
         // We may save tensors or other data for backwards.
-        ctx->save_for_backward({output});
-
+        ctx->save_for_backward({x, a});
+        
         // Finally, we call the implementation.
-        return output;
+        return op.call(x, a);
     }
 
     static tensor_list backward(AutogradContext *ctx, tensor_list grad_outputs) {
         // Retrieve the saved tensors
         auto saved = ctx->get_saved_variables();
         auto x = saved[0];
+        auto a = saved[1];
         auto gy = grad_outputs[0];
 
         // Again, we need to request the dispatcher for the correct implementation.
         static auto op = torch::Dispatcher::singleton()
-            .findSchemaOrThrow("sss::backward", "")
-            .typed<decltype(sss_backward_cuda)>();
+            .findSchemaOrThrow("xssslu::backward", "")
+            .typed<decltype(xssslu_backward_cuda)>();
 
-        return {op.call(x, gy)};
+        return {op.call(x, a, gy)};
     }
 };
 
 // This is what autograd will call.
-at::Tensor sss_forward_autograd(const at::Tensor& x) {
-    return SSSFunction::apply(x);
+at::Tensor xssslu_forward_autograd(const at::Tensor& x, const at::Tensor& a) {
+    return xSSSLUFunction::apply(x, a);
 }
 
 // ===================================================================
@@ -64,26 +63,29 @@ at::Tensor sss_forward_autograd(const at::Tensor& x) {
 
 // First we define the operator schema (independent of backend)
 // This is what users will call.
-TORCH_LIBRARY(sss, m) {
-    m.def("forward(Tensor x) -> Tensor");
-    m.def("backward(Tensor x, Tensor grad_out) -> Tensor");
+TORCH_LIBRARY(xssslu, m) {
+    m.def("forward(Tensor x, Tensor a) -> Tensor");
+    m.def("backward(Tensor x, Tensor a, Tensor grad_out) -> Tensor[]");
 }
 
 // CUDA implementation (found via dispatcher if input is on CUDA)
-TORCH_LIBRARY_IMPL(sss, CUDA, m) {
-    m.impl("forward", sss_forward_cuda);
-    m.impl("backward", sss_backward_cuda);
+TORCH_LIBRARY_IMPL(xssslu, CUDA, m) {
+    m.impl("forward", xssslu_forward_cuda);
+    m.impl("backward", xssslu_backward_cuda);
 }
 
 // AUTOGRAD implementation (found via dispatcher if autograd is enabled)
-TORCH_LIBRARY_IMPL(sss, Autograd, m) {
-    m.impl("forward", sss_forward_autograd);
+TORCH_LIBRARY_IMPL(xssslu, Autograd, m) {
+    m.impl("forward", xssslu_forward_autograd);
     // Note that we don't need to register backward here. The autograd engine will call SSSFunction::backward automatically.
 }
 
 // CPU implementation (not implemented)
 /*
-TORCH_LIBRARY_IMPL(sss, CPU, m) {
-    m.impl("forward", sss_forward_cpu);
+TORCH_LIBRARY_IMPL(xssslu, CPU, m) {
+    m.impl("forward", xssslu_forward_cpu);
 }
 */
+
+
+

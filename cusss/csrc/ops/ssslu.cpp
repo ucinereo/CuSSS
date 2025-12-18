@@ -1,5 +1,5 @@
-#include "sss.hpp"
-#include "sss_cuda.hpp"
+#include "ssslu.hpp"
+#include "ssslu_cuda.hpp"
 
 #include <torch/extension.h>
 #include <torch/library.h>
@@ -11,7 +11,7 @@ using torch::autograd::tensor_list;
 using torch::Tensor;
 
 // To register a backward formula, we need to construct a custom autograd function
-struct SSSFunction : public Function<SSSFunction> {
+struct SSSLUFunction : public Function<SSSLUFunction> {
 
     static at::Tensor forward(AutogradContext *ctx, const at::Tensor& x) {
         // It is important that the forward looks like this.
@@ -27,16 +27,14 @@ struct SSSFunction : public Function<SSSFunction> {
         // To allow for backend-specific implementations, we use the dispatcher to find the correct implementation.
         // This also enables the use of JIT compilation and other optimizations for torchscript.
         static auto op = torch::Dispatcher::singleton()
-            .findSchemaOrThrow("sss::forward", "")
-            .typed<decltype(sss_forward_cuda)>();
-
-        at::Tensor output = op.call(x);
-
+            .findSchemaOrThrow("ssslu::forward", "")
+            .typed<decltype(ssslu_forward_cuda)>();
+        
         // We may save tensors or other data for backwards.
-        ctx->save_for_backward({output});
-
+        ctx->save_for_backward({x});
+        
         // Finally, we call the implementation.
-        return output;
+        return op.call(x);
     }
 
     static tensor_list backward(AutogradContext *ctx, tensor_list grad_outputs) {
@@ -47,16 +45,16 @@ struct SSSFunction : public Function<SSSFunction> {
 
         // Again, we need to request the dispatcher for the correct implementation.
         static auto op = torch::Dispatcher::singleton()
-            .findSchemaOrThrow("sss::backward", "")
-            .typed<decltype(sss_backward_cuda)>();
+            .findSchemaOrThrow("ssslu::backward", "")
+            .typed<decltype(ssslu_backward_cuda)>();
 
         return {op.call(x, gy)};
     }
 };
 
 // This is what autograd will call.
-at::Tensor sss_forward_autograd(const at::Tensor& x) {
-    return SSSFunction::apply(x);
+at::Tensor ssslu_forward_autograd(const at::Tensor& x) {
+    return SSSLUFunction::apply(x);
 }
 
 // ===================================================================
@@ -64,26 +62,29 @@ at::Tensor sss_forward_autograd(const at::Tensor& x) {
 
 // First we define the operator schema (independent of backend)
 // This is what users will call.
-TORCH_LIBRARY(sss, m) {
+TORCH_LIBRARY(ssslu, m) {
     m.def("forward(Tensor x) -> Tensor");
     m.def("backward(Tensor x, Tensor grad_out) -> Tensor");
 }
 
 // CUDA implementation (found via dispatcher if input is on CUDA)
-TORCH_LIBRARY_IMPL(sss, CUDA, m) {
-    m.impl("forward", sss_forward_cuda);
-    m.impl("backward", sss_backward_cuda);
+TORCH_LIBRARY_IMPL(ssslu, CUDA, m) {
+    m.impl("forward", ssslu_forward_cuda);
+    m.impl("backward", ssslu_backward_cuda);
 }
 
 // AUTOGRAD implementation (found via dispatcher if autograd is enabled)
-TORCH_LIBRARY_IMPL(sss, Autograd, m) {
-    m.impl("forward", sss_forward_autograd);
-    // Note that we don't need to register backward here. The autograd engine will call SSSFunction::backward automatically.
+TORCH_LIBRARY_IMPL(ssslu, Autograd, m) {
+    m.impl("forward", ssslu_forward_autograd);
+    // Note that we don't need to register backward here. The autograd engine will call SSSLUFunction::backward automatically.
 }
 
 // CPU implementation (not implemented)
 /*
-TORCH_LIBRARY_IMPL(sss, CPU, m) {
-    m.impl("forward", sss_forward_cpu);
+TORCH_LIBRARY_IMPL(ssslu, CPU, m) {
+    m.impl("forward", ssslu_forward_cpu);
 }
 */
+
+
+

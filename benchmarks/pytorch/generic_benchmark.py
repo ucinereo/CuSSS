@@ -127,11 +127,11 @@ def benchmark_on_cuda(
             # Forward pass:
             # Warm-up
             for _ in range(WARMUP_PASSES):
-                if mode == "SSS":
+                if mode == "SSS": # for functions that only take x
                     y = activ_fn(x)
-                elif mode == "xSSS":
+                elif mode == "xSSS": # for functions that take x and a (scaling parameter)
                     y = activ_fn(x, a)
-                elif mode == "SSSGLU":
+                elif mode == "SSSGLU": # for functions that take x and x2 (equal size)
                     y = activ_fn(x, x2)
 
             forward_passes_times = []

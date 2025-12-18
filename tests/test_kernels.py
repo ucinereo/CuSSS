@@ -3,8 +3,8 @@ Unified parameterized tests for all CUDA kernels.
 
 Usage:
     pytest tests/test_kernels.py                    # Run all kernel tests
-    pytest tests/test_kernels.py --kernel sss       # Run only sss tests {sss, xsss, sssglu}
-    pytest tests/test_kernels.py --kernel xsss      # Run only xsss tests {sss, xsss, sssglu}
+    pytest tests/test_kernels.py --kernel sss       # Run only sss tests {sss, xsss, sssglu, ssslu, xssslu}
+    pytest tests/test_kernels.py --kernel xsss      # Run only xsss tests {sss, xsss, sssglu, ssslu, xssslu}
     pytest tests/test_kernels.py -k forward         # Run only forward tests
     pytest tests/test_kernels.py -k backward        # Run only backward tests
     pytest tests/test_kernels.py --loss l2          # Run only l2 loss {sum, mean, l2, mse}
@@ -102,5 +102,5 @@ class TestKernelParity:
                 ref_grads[key].float(),
                 atol=2e-3 if use_low_precision else 1e-4,
                 rtol=1e-2 if use_low_precision else 1e-5,
-                msg=f"{kernel_name} backward grad[{key}] mismatch at {'ODD' if odd_shape(shape) else 'EVEN'} shape {shape} with {loss_name} loss (abs_diff: {(cuda_grads[key] - ref_grads[key]).mean().item()}, rel_diff: {(cuda_grads[key] - ref_grads[key]).abs().mean() / ref_grads[key].abs().mean()})",
+                msg=f"{kernel_name} backward grad[{key}] mismatch at {'ODD' if odd_shape(shape) else 'EVEN'} shape {shape} with {loss_name} for type {dtype} loss (abs_diff: {(cuda_grads[key] - ref_grads[key]).mean().item()}, rel_diff: {(cuda_grads[key] - ref_grads[key]).abs().mean() / ref_grads[key].abs().mean()})",
             )
