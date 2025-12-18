@@ -49,6 +49,7 @@ class CMakeBuild(build_ext):
         cmake_options = [
             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
             f"-DPython_EXECUTABLE={sys.executable}",
+            "-DCMAKE_BUILD_TYPE=Release",
         ]
 
         print(f"CMake configuration options: {cmake_options}")

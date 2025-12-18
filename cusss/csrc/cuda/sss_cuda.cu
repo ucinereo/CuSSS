@@ -2,6 +2,8 @@
 
 #include <cuda.h>
 #include <torch/script.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <cuda_runtime.h>
 
 using namespace torch::indexing;
 using namespace torch::autograd;
@@ -9,83 +11,55 @@ using namespace torch::autograd;
 using torch::Tensor;
 using torch::TensorOptions;
 
-
 // ===================================================================
 // CUDA KERNELS
 
-__global__ void sss_forward_kernel(const float* x, float* output, int size) {
+__global__ void sss_forward_kernel(const float* __restrict__ x, float* __restrict__ output, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     // index in units of float4
     int i4 = tid;
     int base = i4 * 4;
 
+    // Vectorized path
     if (base + 3 < size) {
-        // vectorized load
         float4 v = reinterpret_cast<const float4*>(x)[i4];
 
-        // Explicit scalar lanes
-        float e0 = v.x;
-        float e1 = v.y;
-        float e2 = v.z;
-        float e3 = v.w;
-
-        // elementwise SSS computation
-        float o0 = (e0 * __frcp_rn(1.0f + fabsf(e0))) * 0.5f + 0.5f;
-        float o1 = (e1 * __frcp_rn(1.0f + fabsf(e1))) * 0.5f + 0.5f;
-        float o2 = (e2 * __frcp_rn(1.0f + fabsf(e2))) * 0.5f + 0.5f;
-        float o3 = (e3 * __frcp_rn(1.0f + fabsf(e3))) * 0.5f + 0.5f;
-
-        // pack results
         float4 out;
-        out.x = o0;
-        out.y = o1;
-        out.z = o2;
-        out.w = o3;
+        out.x = (v.x * __frcp_rn(1.0f + fabsf(v.x))) * 0.5f + 0.5f;
+        out.y = (v.y * __frcp_rn(1.0f + fabsf(v.y))) * 0.5f + 0.5f;
+        out.z = (v.z * __frcp_rn(1.0f + fabsf(v.z))) * 0.5f + 0.5f;
+        out.w = (v.w * __frcp_rn(1.0f + fabsf(v.w))) * 0.5f + 0.5f;
 
-        // vectorized store
         reinterpret_cast<float4*>(output)[i4] = out;
     }
 }
 
-__global__ void sss_backward_kernel(const float* x, const float* grad_out, float* grad_x, int size) {
+__global__ void sss_backward_kernel(const float* __restrict__ y, const float* __restrict__ grad_out, float* __restrict__ grad_x, int size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     // index in units of float4
     int i4 = tid;
     int base = i4 * 4;
 
+    // Vectorized path
     if (base + 3 < size) {
-        // vectorized load
-        float4 v = reinterpret_cast<const float4*>(x)[i4];
+        float4 v = reinterpret_cast<const float4*>(y)[i4];
         float4 g = reinterpret_cast<const float4*>(grad_out)[i4];
 
-        // Explicit scalar lanes
-        float e0 = v.x;
-        float e1 = v.y;
-        float e2 = v.z;
-        float e3 = v.w;
+        float t0 = 1.0f - fabsf(2.0f * v.x - 1.0f);
+        float t1 = 1.0f - fabsf(2.0f * v.y - 1.0f);
+        float t2 = 1.0f - fabsf(2.0f * v.z - 1.0f);
+        float t3 = 1.0f - fabsf(2.0f * v.w - 1.0f);
 
-        // elementwise SSS computation
-        float inv0 = __frcp_rn(1.0f + fabsf(e0));
-        float o0 = (inv0 * inv0) * 0.5f;
-        float inv1 = __frcp_rn(1.0f + fabsf(e1));
-        float o1 = (inv1 * inv1) * 0.5f;
-        float inv2 = __frcp_rn(1.0f + fabsf(e2));
-        float o2 = (inv2 * inv2) * 0.5f;
-        float inv3 = __frcp_rn(1.0f + fabsf(e3));
-        float o3 = (inv3 * inv3) * 0.5f;
-
-        // pack results
         float4 out;
-        out.x = g.x * o0;
-        out.y = g.y * o1;
-        out.z = g.z * o2;
-        out.w = g.w * o3;
+        out.x = g.x * (0.5f * t0 * t0);
+        out.y = g.y * (0.5f * t1 * t1);
+        out.z = g.z * (0.5f * t2 * t2);
+        out.w = g.w * (0.5f * t3 * t3);
 
-        // vectorized store
         reinterpret_cast<float4*>(grad_x)[i4] = out;
-    } 
+    }
 }
 
 // ===================================================================
@@ -95,39 +69,50 @@ at::Tensor sss_forward_cuda(const at::Tensor& x) {
     TORCH_CHECK(x.dtype() == torch::kFloat, "Input tensor must be float!");
     TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
 
-    // x = x.contiguous();
-    auto output = torch::empty_like(x).contiguous();
-    int size = x.numel();
-    
-    // @TODO: Better kernel launch configuration
-    int blockSize = 128;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    auto x_contig = x.contiguous();
 
-    sss_forward_kernel<<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(), output.data_ptr<float>(), size
+    auto output = torch::empty_like(x_contig);
+    int size = x_contig.numel();
+
+    int blockSize = 128;
+    // Round up to ensure tail is covered
+    int num_vectors = (size + 3) / 4;
+    int numBlocks = (num_vectors + blockSize - 1) / blockSize;
+
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    sss_forward_kernel<<<numBlocks, blockSize, 0, stream>>>(
+        x_contig.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
     );
 
     return output;
 }
 
-at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output) {
-    TORCH_CHECK(x.dtype() == torch::kFloat, "Input tensor must be float!");
-    TORCH_CHECK(x.is_cuda(), "Input tensor must be a CUDA tensor!");
+at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output) {
+    TORCH_CHECK(y.dtype() == torch::kFloat, "Input tensor must be float!");
+    TORCH_CHECK(y.is_cuda(), "Input tensor must be a CUDA tensor!");
     TORCH_CHECK(grad_output.dtype() == torch::kFloat, "Grad tensor must be float!");
     TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
-    TORCH_CHECK(x.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
 
-    auto grad_output_contig = grad_output.contiguous(); // Apparently since the loss output might be non-contiguous
-    auto grad_x = torch::empty_like(x).contiguous();
-    int size = x.numel();
+    // Ensure contiguity for float4 alignment
+    auto y_contig = y.contiguous();
+    auto grad_output_contig = grad_output.contiguous();
+
+    // Create output buffer matching the contiguous y
+    auto grad_x = torch::empty_like(y_contig);
+    int size = y_contig.numel();
 
     int blockSize = 128;
-    int num4 = size/4;
-    int numBlocks = (num4 + blockSize - 1) / blockSize;
+    // Round up to ensure tail is covered
+    int num_vectors = (size + 3) / 4;
+    int numBlocks = (num_vectors + blockSize - 1) / blockSize;
 
-    sss_backward_kernel<<<numBlocks, blockSize>>>(
-        x.data_ptr<float>(),
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    sss_backward_kernel<<<numBlocks, blockSize, 0, stream>>>(
+        y_contig.data_ptr<float>(),
         grad_output_contig.data_ptr<float>(),
         grad_x.data_ptr<float>(),
         size
