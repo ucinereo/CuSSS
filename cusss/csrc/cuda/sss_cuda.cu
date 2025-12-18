@@ -127,17 +127,17 @@ at::Tensor sss_forward_cuda(const at::Tensor& x) {
     return output;
 }
 
-at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output_in) {
+at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output) {
     auto y_ = fp8_to_float(y);
     SSS_DTYPE_CHECK(y_, "Input tensor");  
     TORCH_CHECK(y_.is_cuda(), "Input tensor must be a CUDA tensor!");
-    auto grad_output = fp8_to_float(grad_output_in);
-    SSS_DTYPE_CHECK(grad_output, "Grad tensor");
-    TORCH_CHECK(grad_output.is_cuda(), "Grad tensor must be a CUDA tensor!");
-    TORCH_CHECK(y_.numel() == grad_output.numel(), "Grad tensor must be a CUDA tensor!");
+    auto grad_output_ = fp8_to_float(grad_output);
+    SSS_DTYPE_CHECK(grad_output_, "Grad tensor");
+    TORCH_CHECK(grad_output_.is_cuda(), "Grad tensor must be a CUDA tensor!");
+    TORCH_CHECK(y_.numel() == grad_output_.numel(), "Grad tensor must be a CUDA tensor!");
     // Ensure contiguity for float4 alignment
     auto y_contig = y_.contiguous();
-    auto grad_output_contig = grad_output.contiguous();
+    auto grad_output_contig = grad_output_.contiguous();
 
     // Create output buffer matching the contiguous y
     auto grad_x = torch::empty_like(y_contig);
