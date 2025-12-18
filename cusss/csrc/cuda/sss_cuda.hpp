@@ -8,4 +8,4 @@ at::Tensor sss_forward_cuda(const at::Tensor& x);
 // Backward pass: computes
 //   df/dx = 0.5 / (1 + |x|)^2
 // and returns grad_output * df/dx
-at::Tensor sss_backward_cuda(const at::Tensor& y, const at::Tensor& grad_output);
+at::Tensor sss_backward_cuda(const at::Tensor& x, const at::Tensor& grad_output);
