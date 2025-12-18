@@ -57,6 +57,7 @@ make test
 pip install megatron-core
 python3 benchmarks/pytorch/sss_sigmoid_benchmark.py
 python3 benchmarks/pytorch/xsss_scaledSigmoid_benchmark.py
+python3 benchmarks/pytorch/sssglu_swiglu_benchmark.py
 ```
 and/or other benchmark files if applicable
 

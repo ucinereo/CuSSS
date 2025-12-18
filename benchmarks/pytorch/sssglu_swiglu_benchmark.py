@@ -25,7 +25,7 @@ if __name__ == "__main__":
             return sssglu(x, y)
     
     
-    class SWIGLUMegatron(torch.nn.Module):
+    class SWIGLUPyTorch(torch.nn.Module):
         def __init__(self):
             super().__init__()
 
@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     sssglu_megatron = SSSGLUMegatron()
     sssglu_cuda = SSSGLU()
-    swiglu = SWIGLUMegatron()
+    swiglu = SWIGLUPyTorch()
     
 
-    benchmark_on_cuda(modules={"SSSGLU Megatron": sssglu_megatron, "SSSGLU Cuda Naive": sssglu_cuda}, baseline=("SWIGLUMegatron", swiglu), mode="SSSGLU", out_filename="sssglu_swiglu")
+    benchmark_on_cuda(modules={"SSSGLU Megatron": sssglu_megatron, "SSSGLU Cuda Naive": sssglu_cuda}, baseline=("SWIGLUPyTorch", swiglu), mode="SSSGLU", out_filename="sssglu_swiglu")

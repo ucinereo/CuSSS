@@ -37,6 +37,16 @@ def load_benchmark_json(path: Path) -> Dict[int, Any]:
         parsed[key] = v
     return parsed
 
+rename_dict = {
+    "SSS Cuda Naive": "SSS (ours)",
+    "SSS Megatron" : "SSS Megatron",
+    "Sigmoid torch [Baseline]": "Sigmoid PyTorch [Baseline]",
+    "SSSGLU Cuda Naive": "SSSGLU (ours)",
+    "SWIGLUPyTorch [Baseline]": "SwiGLU PyTorch [Baseline]",
+    "Scaled Sigmoid [Baseline]": "ScaledSigmoid PyTorch [Baseline]",
+    "xSSS Cuda Naive" : "xSSS (ours)"
+}
+
 
 def prepare_series(data: Dict[int, Any], direction: str = "forward", stat: str = "mean"):
     # sort sizes
@@ -49,13 +59,19 @@ def prepare_series(data: Dict[int, Any], direction: str = "forward", stat: str =
         dir_block = block.get(direction, {})
         module_names.update(dir_block.keys())
 
+    module_names_2 = set(rename_dict[m] if m in rename_dict.keys() else m for m in module_names)
+
     # prepare mapping module -> list of stat values aligned with sizes
-    series: Dict[str, list[float | None]] = {m: [] for m in sorted(module_names)}
+    series: Dict[str, list[float | None]] = {m: [] for m in sorted(module_names_2)}
     for s in sizes:
         block = data[s]
         dir_block = block.get(direction, {})
-        for m in series:
+        for m in module_names:
             stats = dir_block.get(m)
+
+            if m in rename_dict.keys():
+                m = rename_dict[m]
+
             if stats is None:
                 series[m].append(None)
             else:
@@ -108,27 +124,45 @@ def prepare_combined_series(
     return sizes, series
 
 
-def plot_mean_vs_size(
+def plot_median_vs_size(
     sizes: list[int],
     series: Dict[str, list[float | None]],
     out_path: Path,
     title: str | None = None,
     logx: bool = True,
+    fontsize: int = 14,
 ):
+    # increase base font size for readability
+    plt.rcParams.update({"font.size": fontsize})
     plt.figure(figsize=(8, 5))
-    for name, vals in series.items():
+    # Order legend: put labels ending with '(ours)' first, labels containing '[Baseline]' last
+    def legend_group(name: str) -> int:
+        if name.endswith("(ours)"):
+            return 0
+        if "[Baseline]" in name:
+            return 2
+        return 1
+
+    items = list(series.items())
+    items.sort(key=lambda it: (legend_group(it[0]), it[0]))
+
+    for name, vals in items:
         # replace None with nan so matplotlib can handle gaps
         y = [float(v) if v is not None else math.nan for v in vals]
         plt.plot(sizes, y, marker="o", label=name)
 
-    plt.xlabel("Tensor size (features)")
-    plt.ylabel("Mean time (ms)")
+    plt.xlabel("Tensor size in bytes", fontsize=fontsize)
+    plt.ylabel("Median time per GB (ms/GB)", fontsize=fontsize)
     if title:
-        plt.title(title)
+        plt.title(title, fontsize=max(fontsize, fontsize+2))
     plt.grid(True, which="both", ls="--", lw=0.5)
     if logx:
         plt.xscale("log")
-    plt.legend(loc="best", fontsize="small")
+    # legend font size should follow main fontsize (slightly smaller)
+    legend_fs = max(8, int(fontsize * 0.9))
+    plt.legend(loc="best", fontsize=legend_fs)
+    # scale tick labels
+    plt.tick_params(axis="both", which="major", labelsize=max(8, fontsize - 2))
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Decide extension(s) to save
@@ -169,18 +203,18 @@ def main() -> None:
 
         out_forward = output_path / "forward"
         sizes, series = prepare_series(data, direction="forward")
-        title = f"Forward mean time vs tensor size"
-        plot_mean_vs_size(sizes, series, out_forward, title=title, logx=True)
+        title = f"Forward median time per GB vs tensor size"
+        plot_median_vs_size(sizes, series, out_forward, title=title, logx=True)
 
         out_backward = output_path / "backward"
         sizes, series = prepare_series(data, direction="backward")
-        title = f"Backward mean time vs tensor size"
-        plot_mean_vs_size(sizes, series, out_backward, title=title, logx=True)
+        title = f"Backward median time per GB vs tensor size"
+        plot_median_vs_size(sizes, series, out_backward, title=title, logx=True)
 
         sizes, series = prepare_series(data, direction="combined")
         out_combined = output_path / "combined"
-        title = f"Combined (2x forward + 1x backward) mean time vs tensor size"
-        plot_mean_vs_size(sizes, series, out_combined, title=title, logx=True)  
+        title = f"Combined pass: median time per GB vs tensor size"
+        plot_median_vs_size(sizes, series, out_combined, title=title, logx=True)  
         print(f"Wrote plots to {output_path}")
 
 if __name__ == "__main__":
